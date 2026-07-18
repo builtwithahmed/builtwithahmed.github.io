@@ -1,0 +1,35 @@
+:root {
+  --bg: #05080a;
+  --bg-raised: #0a1013;
+  --grid: #0f2b31;
+  --ink: #d9e2e2;
+  --ink-dim: #6f8181;
+  --signal: #4fccd8;
+  --armed: #3ddc84;
+  --warn: #ffb03a;
+  --alert: #ff5449;
+
+  --font-display: 'Chakra Petch', sans-serif;
+  --font-hud: 'Space Mono', monospace;
+  --font-body: 'Space Grotesk', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { background: var(--bg); }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
