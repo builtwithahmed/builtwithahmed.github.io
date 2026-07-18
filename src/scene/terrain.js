@@ -1,4 +1,11 @@
-import * as THREE from 'three';
+import {
+  PlaneGeometry,
+  ShaderMaterial,
+  UniformsUtils,
+  UniformsLib,
+  Color,
+  Mesh,
+} from 'three';
 
 // P0: flat wireframe-grid plane only. Vertex noise hills and the scan-sweep
 // band (MISSION_PLAN.md §6.1) are P1+ work — deferred, see plan deviations.
@@ -38,15 +45,15 @@ const fragmentShader = /* glsl */ `
 `;
 
 export function createTerrain() {
-  const geometry = new THREE.PlaneGeometry(240, 240, 1, 1);
-  const material = new THREE.ShaderMaterial({
+  const geometry = new PlaneGeometry(240, 240, 1, 1);
+  const material = new ShaderMaterial({
     vertexShader,
     fragmentShader,
-    uniforms: THREE.UniformsUtils.merge([
-      THREE.UniformsLib.fog,
+    uniforms: UniformsUtils.merge([
+      UniformsLib.fog,
       {
         // design token --grid (§2) — terrain wireframe / hairlines
-        uGridColor: { value: new THREE.Color(0x0f2b31) },
+        uGridColor: { value: new Color(0x0f2b31) },
         uCells: { value: 90 },
       },
     ]),
@@ -54,7 +61,7 @@ export function createTerrain() {
     depthWrite: false,
     fog: true,
   });
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new Mesh(geometry, material);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.set(0, 0, -25);
   return mesh;
