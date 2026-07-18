@@ -1,0 +1,16 @@
+main {
+  position: relative;
+  z-index: 2;
+}
+
+section {
+  display: block;
+}
+
+/* Heights proportion §5's T-ranges across ~900vh total scroll.
+   No content yet (P1) — these exist purely to drive scroll length. */
+#hero { min-height: 144vh; }     /* T 0.00-0.16 preflight + takeoff */
+#skills { min-height: 252vh; }   /* T 0.16-0.44 teardown + reassemble */
+#projects { min-height: 288vh; } /* T 0.44-0.76 mission map + descend */
+#services { min-height: 126vh; } /* T 0.76-0.90 inspection */
+#contact { min-height: 90vh; }   /* T 0.90-1.00 RTL / landing */

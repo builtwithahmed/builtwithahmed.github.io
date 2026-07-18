@@ -8,6 +8,23 @@ import {
   DirectionalLight,
 } from 'three';
 
+// The director's keyframes (§5) were tuned by eye against a landscape
+// aspect. A plain fixed vertical FOV shrinks horizontal FOV on narrow
+// portrait viewports (horizontalFOV depends on aspect), which pushes the
+// same world-space L/R offset toward — or past — the screen edge. Widen
+// the vertical FOV on portrait to keep horizontal framing closer to the
+// landscape reference, clamped so it doesn't fisheye.
+const BASE_FOV = 58;
+const REFERENCE_ASPECT = 1440 / 900;
+const MAX_FOV = 100;
+
+function fovForAspect(aspect) {
+  if (aspect >= 1) return BASE_FOV;
+  const baseHorizontalTan = Math.tan((BASE_FOV * Math.PI) / 360) * REFERENCE_ASPECT;
+  const targetVerticalRad = 2 * Math.atan(baseHorizontalTan / aspect);
+  return Math.min((targetVerticalRad * 180) / Math.PI, MAX_FOV);
+}
+
 export function createWorld(canvas) {
   const renderer = new WebGLRenderer({
     canvas,
@@ -21,12 +38,8 @@ export function createWorld(canvas) {
   scene.background = new Color(0x05080a);
   scene.fog = new Fog(0x05080a, 14, 85);
 
-  const camera = new PerspectiveCamera(
-    58,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    200
-  );
+  const aspect = window.innerWidth / window.innerHeight;
+  const camera = new PerspectiveCamera(fovForAspect(aspect), aspect, 0.1, 200);
   camera.position.set(0, 1.8, 7);
   camera.lookAt(0, 0.8, 0);
 
@@ -37,7 +50,9 @@ export function createWorld(canvas) {
   scene.add(key);
 
   window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const nextAspect = window.innerWidth / window.innerHeight;
+    camera.aspect = nextAspect;
+    camera.fov = fovForAspect(nextAspect);
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
