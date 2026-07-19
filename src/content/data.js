@@ -23,10 +23,10 @@ export const teardown = {
 
 // §6.2's component -> skill-label -> tags mapping is authoritative (it's
 // MISSION_PLAN's own table, not invented copy); blurbs are the closest
-// matching real sentence from v1. Two entries ("APIs & Cloud" and
-// "Deployment & CI/CD") don't have a 1:1 title match in v1 — both draw
-// from v1's single "Cloud & Storage" skill row, which is the only place
-// v1 actually mentions GitHub CI/CD, Render, R2, and Supabase together.
+// matching real sentence from v1. "APIs & Cloud" and "Deployment &
+// CI/CD" don't have a 1:1 title match in v1 — both originally reused
+// v1's single "Cloud & Storage" sentence as a placeholder; provided
+// directly (pending Ahmed's confirmation) as of 2026-07-19.
 export const skills = [
   {
     componentKey: 'flightController',
@@ -50,7 +50,8 @@ export const skills = [
   {
     componentKey: 'antenna',
     title: 'APIs & Cloud',
-    blurb: 'Render deployments, Cloudflare R2 object storage, Supabase database, GitHub CI/CD.',
+    // Pending Ahmed's confirmation — see comment above.
+    blurb: 'FastAPI services on Supabase and Postgres, object storage on Cloudflare R2, deployed to Render.',
     tags: ['FastAPI', 'Supabase', 'R2', 'Render'],
   },
   {
@@ -62,7 +63,8 @@ export const skills = [
   {
     componentKey: 'battery',
     title: 'Deployment & CI/CD',
-    blurb: 'Render deployments, Cloudflare R2 object storage, Supabase database, GitHub CI/CD.',
+    // Pending Ahmed's confirmation — see comment above.
+    blurb: 'GitHub Actions pipelines, automated builds, static hosting on Pages.',
     tags: ['GitHub', 'Actions', 'Pages'],
   },
 ];
