@@ -10,7 +10,11 @@ const VIEWPORTS = [
   { name: '1440x900', width: 1440, height: 900 },
   { name: '390x844', width: 390, height: 844 },
 ];
-const STEPS = Array.from({ length: 11 }, (_, i) => i / 10); // 0, 0.1 ... 1.0
+// Standard 0, 0.1 ... 1.0 grid plus the P2 gate's finer-grained steps around
+// the Act I/II beat transitions (hero fade, teardown explode ramp).
+const STANDARD_STEPS = Array.from({ length: 11 }, (_, i) => i / 10);
+const EXTRA_STEPS = [0.12, 0.18, 0.24, 0.3, 0.36];
+const STEPS = [...new Set([...STANDARD_STEPS, ...EXTRA_STEPS])].sort((a, b) => a - b);
 
 try {
   await fetch(url, { signal: AbortSignal.timeout(2000) });
@@ -35,7 +39,11 @@ for (const vp of VIEWPORTS) {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       window.scrollTo(0, Math.max(0, max) * tt);
     }, t);
-    await page.waitForTimeout(600);
+    // 1200ms, not 600ms: this jumps scrollY instantly rather than a real
+    // continuous scroll, so the damped T needs real time to settle. At
+    // 600ms some transitions were still ~10% short of their target,
+    // masking real framing bugs that only showed up once fully settled.
+    await page.waitForTimeout(1200);
     const path = `${OUT_DIR}/${vp.name}_t${t.toFixed(2)}.png`;
     await page.screenshot({ path });
     console.log('saved', path);

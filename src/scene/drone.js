@@ -141,14 +141,16 @@ export function createDrone() {
   });
   drone.add(undercarriage);
 
-  function explode(k) {
+  // radialScale (Amendment B) shrinks how far components fly out on narrow
+  // viewports — applied to the offset only, k still drives the 0..1 ramp.
+  function explode(k, radialScale = 1) {
     k = Math.min(1, Math.max(0, k));
     for (const name in components) {
       const c = components[name];
       c.object.position.set(
-        c.assembled[0] + (c.exploded[0] - c.assembled[0]) * k,
-        c.assembled[1] + (c.exploded[1] - c.assembled[1]) * k,
-        c.assembled[2] + (c.exploded[2] - c.assembled[2]) * k
+        c.assembled[0] + (c.exploded[0] - c.assembled[0]) * k * radialScale,
+        c.assembled[1] + (c.exploded[1] - c.assembled[1]) * k * radialScale,
+        c.assembled[2] + (c.exploded[2] - c.assembled[2]) * k * radialScale
       );
       c.object.rotation.set(c.rot[0] * k, c.rot[1] * k, c.rot[2] * k);
     }

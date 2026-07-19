@@ -1,0 +1,168 @@
+/* Rule of the Empty Half (§4) + Amendment A (mobile stack).
+   #content-stage is a fixed full-viewport grid; body[data-layout][data-side]
+   (written by director.js) decides which cell .content-block occupies.
+   Content opacity/position is driven per-frame from already-damped T in
+   content.js — no CSS transitions here, that would double-smooth. */
+
+#content-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  pointer-events: none;
+  padding: 0 24px;
+}
+
+.content-block {
+  display: none; /* toggled to 'block' by content.js per T range */
+  pointer-events: auto;
+}
+
+.content-block .eyebrow {
+  font-family: var(--font-hud);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--signal);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.content-block .eyebrow i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--armed);
+  box-shadow: 0 0 8px var(--armed);
+  flex-shrink: 0;
+}
+.content-block h1,
+.content-block h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.06;
+  color: var(--ink);
+  text-shadow: 0 4px 40px rgba(0, 0, 0, 0.8);
+}
+/* Hero must fit the bottom-third budget (§4) without scrolling — the
+   §2 reference scale (clamp(3rem,8vw,7.5rem)) doesn't fit inside 32vh
+   alongside a subhead + CTAs on a 900px-tall viewport, so this is tuned
+   down from that reference in favour of actually satisfying §4. */
+.content-block h1 { font-size: clamp(1.8rem, 3.6vw, 3.2rem); margin-bottom: 8px; }
+.content-block h1 .accent { color: var(--signal); text-shadow: 0 0 40px rgba(79, 204, 216, 0.35); }
+.content-block h2 { font-size: clamp(1.7rem, 3vw, 2.6rem); margin-bottom: 8px; }
+.content-block .sub {
+  font-family: var(--font-body);
+  color: var(--ink-dim);
+  font-size: clamp(0.95rem, 1.2vw, 1.1rem);
+  line-height: 1.6;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
+}
+.hero-block .sub { font-size: clamp(0.82rem, 0.95vw, 0.95rem); line-height: 1.5; }
+.content-block .ctas {
+  margin-top: 16px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.btn-primary,
+.btn-ghost {
+  font-family: var(--font-hud);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 24px;
+  border-radius: 99px;
+  text-decoration: none;
+}
+.btn-primary { background: var(--signal); color: #08282c; }
+.btn-ghost { border: 1px solid rgba(79, 204, 216, 0.3); color: var(--ink); }
+
+.teardown-header .sub { max-width: 46ch; margin-top: 6px; }
+
+/* ---------------- Desktop split (>=760px) ---------------- */
+body[data-layout='split'] #content-stage {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+  align-items: center;
+}
+body[data-layout='split'][data-side='L'] .content-block {
+  grid-column: 2 / 3;
+  justify-self: end;
+  max-width: 46vw;
+  text-align: left;
+  background: linear-gradient(to left, rgba(5, 8, 10, 0.82), transparent 60%);
+  padding: 4vh 3vw;
+}
+body[data-layout='split'][data-side='R'] .content-block {
+  grid-column: 1 / 2;
+  justify-self: start;
+  max-width: 46vw;
+  text-align: left;
+  background: linear-gradient(to right, rgba(5, 8, 10, 0.82), transparent 60%);
+  padding: 4vh 3vw;
+}
+body[data-layout='split'][data-side='C'] .content-block {
+  grid-column: 1 / -1;
+  justify-self: center;
+  align-self: end;
+  max-height: 32vh;
+  max-width: 720px;
+  text-align: center;
+  background: linear-gradient(to top, rgba(5, 8, 10, 0.85), transparent 60%);
+  padding: 2vh 24px 3vh;
+  overflow-y: auto; /* safety net — tuned type should fit without scrolling */
+}
+body[data-layout='split'][data-side='C'] .content-block .ctas { justify-content: center; }
+
+/* ---------------- Mobile stack (<760px) ---------------- */
+body[data-layout='stack'] #content-stage {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+body[data-layout='stack'][data-side='L'] .content-block,
+body[data-layout='stack'][data-side='R'] .content-block {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  justify-self: stretch;
+  /* 42vh, not the full 45vh the layout budget allows — the drone's bbox
+     grazes the top few px of a 45vh-tall block during teardown at some
+     t-steps (table G), so this trades a little content height for a
+     guaranteed gap. */
+  max-height: 41vh;
+  width: 100%;
+  text-align: left;
+  background: linear-gradient(to top, rgba(5, 8, 10, 0.85), transparent 60%);
+  padding: 3vh 20px 4vh;
+  overflow-y: auto;
+}
+body[data-layout='stack'][data-side='C'] .content-block {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  justify-self: center;
+  max-height: 33vh; /* bottom third */
+  width: 100%;
+  text-align: center;
+  background: linear-gradient(to top, rgba(5, 8, 10, 0.85), transparent 60%);
+  padding: 2vh 20px 3vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 759px) {
+  /* Narrower measure wraps the hero subhead to more lines than desktop,
+     which was overflowing the bottom-third budget by ~47px (measured) and
+     clipping the second CTA. Tighten spacing rather than growing the box
+     past the bottom third. */
+  .hero-block .sub { font-size: 0.78rem; line-height: 1.45; }
+  .hero-block .ctas { margin-top: 12px; gap: 10px; }
+  .hero-block .btn-primary,
+  .hero-block .btn-ghost { padding: 9px 20px; font-size: 12px; }
+  body[data-layout='stack'][data-side='C'] .content-block { padding: 1.5vh 20px 2vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-block { transition: none; }
+}

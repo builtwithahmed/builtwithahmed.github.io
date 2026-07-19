@@ -16,7 +16,7 @@ import {
 // landscape reference, clamped so it doesn't fisheye.
 const BASE_FOV = 58;
 const REFERENCE_ASPECT = 1440 / 900;
-const MAX_FOV = 100;
+const MAX_FOV = 85;
 
 function fovForAspect(aspect) {
   if (aspect >= 1) return BASE_FOV;
