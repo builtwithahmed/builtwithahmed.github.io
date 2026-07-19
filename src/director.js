@@ -17,9 +17,16 @@ const KEYFRAMES = [
   // position matches the point already on the idx@0.10->idx@0.22 curve.
   { t: 0.20, cam: [5.7, 2.96, -3.37], look: [0, 2.36, -11.33], drone: [-1.37, 2.39, -9.48], focus: 'C' },
   { t: 0.22, cam: [5.8, 3.0, -4], look: [2.5, 2.4, -12], drone: [-1.5, 2.4, -10], focus: 'L' }, // TEARDOWN (left)
+  // Holds a strong L offset right up to the R transition — the origin-only
+  // NDC check missed this, but the silhouette (full bounding-box) check
+  // caught it: by t=0.30 the look-at had already interpolated to within
+  // ~0.08 of neutral on its way toward idx @0.36's R offset, so the box's
+  // right edge crossed into positive NDC while still labeled L. Drone
+  // position matches the point already on the idx@0.22->idx@0.36 curve.
+  { t: 0.30, cam: [-1.23, 3.36, -7.64], look: [3.5, 2.64, -14.43], drone: [0.14, 2.7, -13.03], focus: 'L' },
   { t: 0.36, cam: [-5.8, 3.6, -10], look: [-1.5, 2.8, -16], drone: [1.2, 2.9, -15], focus: 'R' }, // TEARDOWN (flipped)
   { t: 0.46, cam: [0, 9.5, -14], look: [-6, 1.8, -25], drone: [0, 2.6, -20], focus: 'R' }, // MISSION MAP
-  { t: 0.60, cam: [0.5, 11.5, -21], look: [-8, 1.8, -30], drone: [-3.0, 3.8, -27], focus: 'R' }, // MISSION MAP
+  { t: 0.60, cam: [0.5, 11.5, -21], look: [-11, 1.8, -30], drone: [-3.0, 3.8, -27], focus: 'R' }, // MISSION MAP
   // Holds the R offset right up to the C transition — without this, the
   // interpolation toward idx @0.72's neutral look-at drifts the drone back
   // toward center before the focus label itself flips (caught by the P1
