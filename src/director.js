@@ -8,7 +8,15 @@
 // keyframe is tagged with the §5 act it falls in, so the side flips at
 // keyframe boundaries rather than interpolating (L/R/C is categorical).
 const KEYFRAMES = [
-  { t: 0.00, cam: [0, 2.0, 8.5], look: [0, 1.6, 0], drone: [0, 1.6, 0], focus: 'C' }, // PREFLIGHT
+  // Amendment D-a: cam pulled in from z=8.5 to ~30-35% frame width (was
+  // ~11-14%) — moved the camera closer rather than scaling the model, per
+  // instruction. Tuned empirically against __debugNDC().bboxWidthPct. The
+  // look-at is deliberately below the drone's own y (1.6) rather than
+  // matching it — looking straight at the drone put its bbox dead center,
+  // which at this larger on-screen size collided with the hero content's
+  // bottom-third band (Table G); tilting the look down pushes the drone
+  // higher in frame without touching horizontal framing/width%.
+  { t: 0.00, cam: [0, 1.85, 4.3], look: [0, 0.85, 0], drone: [0, 1.6, 0], focus: 'C' }, // PREFLIGHT
   { t: 0.10, cam: [4.5, 2.4, 4.5], look: [0, 1.9, -3], drone: [0.3, 2.2, -3], focus: 'C' }, // TAKEOFF
   // Holds a neutral (unshifted) look-at right up to the L transition — same
   // fix as the t=0.70 keyframe below, mirrored: without it, interpolation
@@ -139,9 +147,16 @@ export function createDirector() {
     focus: 'C',
     layout: MOBILE_QUERY.matches ? 'stack' : 'split',
     explodeScale: MOBILE_QUERY.matches ? EXPLODE_SCALE_MOBILE : 1,
-    cam: [0, 2.0, 8.5],
-    look: [0, 1.6, 0],
-    dronePos: [0, 1.6, 0],
+    // Read from KEYFRAMES[0] rather than duplicated by hand — a hand-
+    // copied value here silently went stale when Amendment D-a moved the
+    // t=0 camera closer, leaving main.js's camPos/camLook to lerp in from
+    // the old position on every page load instead of starting there. That
+    // lerp needs real (rAF-throttle-prone) frame time to catch up, which
+    // made t=0 gate measurements nondeterministic even though T itself
+    // never needed to move. One source of truth removes the drift risk.
+    cam: [...KEYFRAMES[0].cam],
+    look: [...KEYFRAMES[0].look],
+    dronePos: [...KEYFRAMES[0].drone],
     explode: 0,
     altitude: 0,
     speed: 0,

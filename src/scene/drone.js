@@ -18,11 +18,16 @@ import {
 
 function createMaterials() {
   return {
-    body: new MeshStandardMaterial({ color: 0x1c2426, roughness: 0.45, metalness: 0.7 }),
+    // Amendment D: roughness/metalness tuned so the body reads as brushed
+    // metal catching the rim/key lights instead of flat matte plastic.
+    body: new MeshStandardMaterial({ color: 0x1c2426, roughness: 0.35, metalness: 0.85 }),
     dark: new MeshStandardMaterial({ color: 0x11181a, roughness: 0.6, metalness: 0.5 }),
-    cyan: new MeshStandardMaterial({ color: 0x4fccd8, emissive: 0x4fccd8, emissiveIntensity: 0.9, roughness: 0.3 }),
-    green: new MeshStandardMaterial({ color: 0x38d67a, emissive: 0x38d67a, emissiveIntensity: 1 }),
-    red: new MeshStandardMaterial({ color: 0xff5449, emissive: 0xff5449, emissiveIntensity: 1 }),
+    // emissiveIntensity raised well past the bloom threshold (post.js, 0.7)
+    // so nav LEDs / the body stripe / lens actually glow instead of just
+    // being a slightly-lighter cyan.
+    cyan: new MeshStandardMaterial({ color: 0x4fccd8, emissive: 0x4fccd8, emissiveIntensity: 2.2, roughness: 0.3 }),
+    green: new MeshStandardMaterial({ color: 0x38d67a, emissive: 0x38d67a, emissiveIntensity: 1.8 }),
+    red: new MeshStandardMaterial({ color: 0xff5449, emissive: 0xff5449, emissiveIntensity: 1.8 }),
     rotor: new MeshBasicMaterial({ color: 0x9adfe8, transparent: true, opacity: 0.28, side: DoubleSide }),
   };
 }
@@ -73,6 +78,7 @@ export function createDrone() {
   // rotor set (hubs + blur discs, separate from the arms/motors) -> "Full-Stack Web Dev"
   const rotors = new Group();
   const rotorHubs = [];
+  const rotorDiscs = [];
   const armPositions = [
     [0.55, 0.55],
     [-0.55, 0.55],
@@ -105,6 +111,7 @@ export function createDrone() {
     hub.add(blade1, blade2, disc);
     rotors.add(hub);
     rotorHubs.push(hub);
+    rotorDiscs.push(disc);
   });
   registerComponent('escArms', escArms, [0, 0, 0], [0, -0.5, 0], 0.7, [0, 0.4, 0]);
   registerComponent('rotors', rotors, [0, 0, 0], [0, 0.9, 0], 1.2, [0, -0.4, 0]);
@@ -171,8 +178,13 @@ export function createDrone() {
     drone.position.lerp(targetVec, reducedMotion ? 1 : damp * 1.6);
 
     const vx = drone.position.x - prevPos.x;
+    const vy = drone.position.y - prevPos.y;
     const vz = drone.position.z - prevPos.z;
-    const speed = Math.sqrt(vx * vx + vz * vz) / Math.max(dt, 1e-4);
+    // vy is included so the takeoff beat's vertical climb ramps rotor spin
+    // (Amendment E) — the old horizontal-only speed left the rotors idling
+    // through a near-vertical ascent, which is exactly when they should be
+    // reading as fastest.
+    const speed = Math.sqrt(vx * vx + vy * vy + vz * vz) / Math.max(dt, 1e-4);
 
     if (speed > 0.15) {
       const yaw = Math.atan2(vx, vz);
@@ -191,6 +203,12 @@ export function createDrone() {
     const spin = reducedMotion ? 2 : flying ? 16 + speed * 4 : 3;
     rotorHubs.forEach((hub, i) => {
       hub.rotation.y += dt * spin * (i % 2 ? 1 : -1);
+    });
+    // Amendment E: "motion blur" via lower disc opacity as spin ramps up —
+    // reads as the blades thinning into a faster blur, not literal blur.
+    const discOpacity = reducedMotion ? 0.1 : Math.max(0.025, 0.12 - spin * 0.0035);
+    rotorDiscs.forEach((disc) => {
+      disc.material.opacity = discOpacity;
     });
 
     return speed;

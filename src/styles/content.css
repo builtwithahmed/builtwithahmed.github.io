@@ -82,10 +82,21 @@
 .teardown-header .sub { max-width: 46ch; margin-top: 6px; }
 
 /* ---------------- Desktop split (>=760px) ---------------- */
+/* P2.5 defect 2: the HUD's telemetry/mode blocks (hud.css) occupy fixed
+   bottom-left/bottom-right bands and the corner brackets occupy a fixed
+   top band; content used to be free to grow into them (a t=0.36 R-focus
+   teardown block collided with .hud-tele at bottom-left). Reserve those
+   bands as real grid rows so no content-block can ever be placed there,
+   rather than trying to out-guess their height per screenshot. */
 body[data-layout='split'] #content-stage {
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr;
+  grid-template-rows: var(--hud-safe-top) 1fr var(--hud-safe-bottom);
   align-items: center;
+}
+body[data-layout='split'] .content-block {
+  grid-row: 2;
+  max-height: calc(100vh - var(--hud-safe-top) - var(--hud-safe-bottom));
+  overflow-y: auto;
 }
 body[data-layout='split'][data-side='L'] .content-block {
   grid-column: 2 / 3;

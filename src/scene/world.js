@@ -6,6 +6,7 @@ import {
   PerspectiveCamera,
   HemisphereLight,
   DirectionalLight,
+  ACESFilmicToneMapping,
 } from 'three';
 
 // The director's keyframes (§5) were tuned by eye against a landscape
@@ -30,9 +31,19 @@ export function createWorld(canvas) {
     canvas,
     antialias: true,
     powerPreference: 'high-performance',
+    // Needed for the gate's luminance readback (main.js's __debugLuminance,
+    // gl.readPixels against the default framebuffer) — without this the
+    // browser is free to clear the drawing buffer right after compositing,
+    // which reads back as all-zero (a false "void frame") even when the
+    // actually-displayed frame wasn't.
+    preserveDrawingBuffer: true,
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // UnrealBloomPass (post.js) requires tone mapping enabled to look right —
+  // untonemapped bloom clips to flat white instead of a soft glow.
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
 
   const scene = new Scene();
   scene.background = new Color(0x05080a);
@@ -48,6 +59,13 @@ export function createWorld(canvas) {
   const key = new DirectionalLight(0x9adfe8, 0.8);
   key.position.set(6, 12, 6);
   scene.add(key);
+  // Amendment D: a dim cyan rim light from behind-camera-left so the
+  // drone's silhouette edges catch light against the void instead of
+  // reading as a flat smudge — the hemi+key alone left the drone underlit
+  // from the camera's vantage.
+  const rim = new DirectionalLight(0x4fccd8, 0.45);
+  rim.position.set(-8, 4, 10);
+  scene.add(rim);
 
   window.addEventListener('resize', () => {
     const nextAspect = window.innerWidth / window.innerHeight;

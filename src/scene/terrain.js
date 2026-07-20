@@ -4,19 +4,26 @@ import {
   UniformsUtils,
   UniformsLib,
   Color,
+  Vector3,
   Mesh,
 } from 'three';
 
-// P0: flat wireframe-grid plane only. Vertex noise hills and the scan-sweep
-// band (MISSION_PLAN.md §6.1) are P1+ work — deferred, see plan deviations.
-// Fog is wired via three's built-in fog chunks (material.fog = true) rather
-// than a hand-rolled distance fade, so it stays in sync with scene.fog (world.js).
+// P2.5 Amendment D: the flat wireframe grid at a uniform 0.85 alpha over a
+// near-black background doesn't register as ground — it needs a reason to
+// be brighter somewhere. Rather than raising --grid itself (a design
+// token, not a per-scene knob), the fragment shader boosts line brightness
+// as a function of distance to the drone's current world position, fed in
+// per frame from main.js via uDronePos. Falls back to the still-slightly-
+// brighter base rate everywhere else so the corridor doesn't look like a
+// spotlight cutout.
 const vertexShader = /* glsl */ `
   #include <common>
   #include <fog_pars_vertex>
   varying vec2 vUv;
+  varying vec3 vWorldPos;
   void main() {
     vUv = uv;
+    vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     #include <fog_vertex>
@@ -27,8 +34,11 @@ const fragmentShader = /* glsl */ `
   #include <common>
   #include <fog_pars_fragment>
   varying vec2 vUv;
+  varying vec3 vWorldPos;
   uniform vec3 uGridColor;
   uniform float uCells;
+  uniform vec3 uDronePos;
+  uniform float uBoostRadius;
 
   float gridLine(vec2 uv, float cells) {
     vec2 coord = uv * cells;
@@ -39,7 +49,11 @@ const fragmentShader = /* glsl */ `
 
   void main() {
     float line = gridLine(vUv, uCells);
-    gl_FragColor = vec4(uGridColor, line * 0.85);
+    float dist = length(vWorldPos.xz - uDronePos.xz);
+    float proximity = 1.0 - smoothstep(0.0, uBoostRadius, dist);
+    vec3 color = uGridColor * (1.6 + proximity * 2.2);
+    float alpha = line * (0.55 + proximity * 0.4);
+    gl_FragColor = vec4(color, alpha);
     #include <fog_fragment>
   }
 `;
@@ -55,6 +69,8 @@ export function createTerrain() {
         // design token --grid (§2) — terrain wireframe / hairlines
         uGridColor: { value: new Color(0x0f2b31) },
         uCells: { value: 90 },
+        uDronePos: { value: new Vector3(0, 0, 0) },
+        uBoostRadius: { value: 15 },
       },
     ]),
     transparent: true,

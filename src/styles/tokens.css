@@ -9,6 +9,11 @@
   --warn: #ffb03a;
   --alert: #ff5449;
 
+  /* Bands reserved for the persistent HUD (hud.css) so content-stage grid
+     rows can never place a content-block underneath it (P2.5 defect 2). */
+  --hud-safe-top: 60px;
+  --hud-safe-bottom: 150px;
+
   --font-display: 'Chakra Petch', sans-serif;
   --font-hud: 'Space Mono', monospace;
   --font-body: 'Space Grotesk', sans-serif;

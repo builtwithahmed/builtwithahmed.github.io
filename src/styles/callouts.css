@@ -17,6 +17,15 @@
   stroke-width: 1.5;
 }
 
+.callout-dot {
+  fill: var(--signal);
+  opacity: 0.2;
+}
+.callout-dot.active {
+  fill: var(--warn);
+  opacity: 1;
+}
+
 .callout-stack {
   margin-top: 18px;
   display: flex;
@@ -26,7 +35,9 @@
 
 .callout-label {
   display: none;
-  opacity: 0.45;
+  /* Amendment F: inactive callouts read as "queued", not equal-weight list
+     items — dropped from 0.45 so only the active one competes for attention. */
+  opacity: 0.2;
   padding: 10px 0;
   border-bottom: 1px solid rgba(79, 204, 216, 0.1);
 }
@@ -51,11 +62,13 @@
 }
 
 .callout-label .tags {
-  display: flex;
+  /* Amendment F: tags are detail that only the active callout earns. */
+  display: none;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 7px;
 }
+.callout-label.active .tags { display: flex; }
 .callout-label .tag {
   font-family: var(--font-hud);
   font-size: 0.66rem;

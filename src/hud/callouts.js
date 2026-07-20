@@ -27,6 +27,14 @@ export function createCallouts({ camera, drone, mountEl }) {
     path.classList.add('callout-line');
     svg.appendChild(path);
 
+    // Amendment F: a leader line must never terminate in empty space — an
+    // anchor dot is drawn at the component's own projected position for
+    // every visible callout, independent of the label end of the line.
+    const dot = document.createElementNS(SVG_NS, 'circle');
+    dot.classList.add('callout-dot');
+    dot.setAttribute('r', '3');
+    svg.appendChild(dot);
+
     const label = document.createElement('div');
     label.className = 'callout-label';
     label.innerHTML = `
@@ -36,7 +44,7 @@ export function createCallouts({ camera, drone, mountEl }) {
     `;
     mountEl.appendChild(label);
 
-    return { skill, path, label };
+    return { skill, path, dot, label };
   });
 
   const worldPos = new Vector3();
@@ -45,6 +53,7 @@ export function createCallouts({ camera, drone, mountEl }) {
   function hide(item) {
     item.label.classList.remove('visible', 'active');
     item.path.style.opacity = '0';
+    item.dot.style.opacity = '0';
   }
 
   function update(state) {
@@ -53,9 +62,20 @@ export function createCallouts({ camera, drone, mountEl }) {
     const bandIndex = Math.min(items.length - 1, Math.max(0, Math.floor((T - BAND_START) / BAND_WIDTH)));
     const dockRight = state.focus === 'L'; // content docks opposite the drone's side
 
+    // Amendment F: callouts sequence rather than list — at most a few are
+    // ever visible at once, a window around the active band, so the mobile
+    // stack never has to hold (and clip/scroll) all six simultaneously.
+    // Desktop: previous, active, next (<=3). Mobile: active, next (<=2) —
+    // the previous entry has already been read and mobile's 41vh budget
+    // can't afford it.
+    const isMobile = state.layout === 'stack';
+    const windowMin = isMobile ? bandIndex : bandIndex - 1;
+    const windowMax = bandIndex + 1;
+
     items.forEach((item, i) => {
       const revealed = inRange && (reducedMotion ? true : T >= BAND_START + i * BAND_WIDTH);
-      if (!revealed) return hide(item);
+      const inWindow = i >= windowMin && i <= windowMax;
+      if (!revealed || !inWindow) return hide(item);
 
       const component = drone.components[item.skill.componentKey];
       component.object.getWorldPosition(worldPos);
@@ -70,6 +90,11 @@ export function createCallouts({ camera, drone, mountEl }) {
 
       const sx = (projected.x * 0.5 + 0.5) * window.innerWidth;
       const sy = ((1 - projected.y) * 0.5) * window.innerHeight;
+
+      item.dot.setAttribute('cx', String(sx));
+      item.dot.setAttribute('cy', String(sy));
+      item.dot.classList.toggle('active', active);
+      item.dot.style.opacity = '1';
 
       const labelRect = item.label.getBoundingClientRect();
       if (labelRect.width === 0) return; // not laid out yet (display:none this frame)
