@@ -5,6 +5,8 @@ import { createWorld } from './scene/world.js';
 import { createTerrain } from './scene/terrain.js';
 import { createHelipad, createHorizon, createDustRing, createSky } from './scene/environment.js';
 import { createDrone } from './scene/drone.js';
+import { createMap } from './scene/map.js';
+import { createTower } from './scene/tower.js';
 import { detectTier } from './scene/tier.js';
 import { createPostPipeline } from './scene/post.js';
 import { createDirector } from './director.js';
@@ -27,6 +29,10 @@ const horizon = createHorizon();
 scene.add(horizon);
 const dustRing = createDustRing(0, 0);
 scene.add(dustRing.mesh);
+const map = createMap();
+scene.add(map.group);
+const tower = createTower();
+scene.add(tower.group);
 
 const director = createDirector();
 
@@ -71,6 +77,8 @@ function tick() {
   drone.explode(state.explode, state.explodeScale);
   drone.update(dt, state.dronePos, { time, reducedMotion: state.reducedMotion, flying });
   dustRing.update(state.T, state.reducedMotion);
+  map.update(state.T, time, state.reducedMotion);
+  tower.update(time, state.reducedMotion);
 
   const damp = state.reducedMotion ? 1 : 1 - Math.exp(-4.2 * dt);
   camTarget.set(...state.cam);
@@ -107,7 +115,16 @@ if (new URLSearchParams(location.search).has('debug')) {
   // P2.6 diagnostics: toggle individual scene layers on/off from a gate
   // script to isolate a visual artifact (which object is actually
   // producing it) without a rebuild per guess.
-  window.__debugLayers = { terrain, helipad, horizon, dustRing: dustRing.mesh, drone: drone.group, sky };
+  window.__debugLayers = {
+    terrain,
+    helipad,
+    horizon,
+    dustRing: dustRing.mesh,
+    drone: drone.group,
+    sky,
+    map: map.group,
+    tower: tower.group,
+  };
   window.__debugProjectWorld = (x, y, z) => {
     const p = new Vector3(x, y, z).project(camera);
     return { x: p.x, y: p.y, z: p.z };
@@ -266,6 +283,91 @@ if (new URLSearchParams(location.search).has('debug')) {
       }
       return { pixelsChecked: checked, brightPixels: bright, frameMean };
     });
+  };
+
+  // P2.7 Stage 2: "ensure the drone stays rim-lit and readable... report
+  // the drone silhouette's contrast against its immediate background."
+  // Reuses __debugNDC's box3-corner-projection technique to get a pixel
+  // rect for the drone, reads its mean luminance, then reads a margin ring
+  // just outside that rect (not the whole frame — a bright hero gradient
+  // or dark void far from the drone would dilute/inflate a whole-frame
+  // comparison and not reflect what "against its immediate background"
+  // actually means).
+  window.__debugDroneContrast = (marginPx = 40) => {
+    const box = new Box3().setFromObject(drone.group);
+    const corner = new Vector3();
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      corner.set(
+        i & 1 ? box.max.x : box.min.x,
+        i & 2 ? box.max.y : box.min.y,
+        i & 4 ? box.max.z : box.min.z
+      );
+      corner.project(camera);
+      minX = Math.min(minX, corner.x);
+      maxX = Math.max(maxX, corner.x);
+      minY = Math.min(minY, corner.y);
+      maxY = Math.max(maxY, corner.y);
+    }
+
+    const gl = renderer.getContext();
+    const dpr = renderer.getPixelRatio();
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const cssW = cw / dpr;
+    const cssH = ch / dpr;
+    // NDC -> CSS px (top-left origin), matching __debugSilhouetteOverlap's
+    // rect convention.
+    const left = ((minX + 1) / 2) * cssW;
+    const right = ((maxX + 1) / 2) * cssW;
+    const top = ((1 - maxY) / 2) * cssH;
+    const bottom = ((1 - minY) / 2) * cssH;
+
+    function meanLuminance(l, t, r, b) {
+      const x0 = Math.max(0, Math.floor(l * dpr));
+      const x1 = Math.min(cw, Math.ceil(r * dpr));
+      const y0 = Math.max(0, Math.floor(t * dpr));
+      const y1 = Math.min(ch, Math.ceil(b * dpr));
+      const w = x1 - x0;
+      const h = y1 - y0;
+      if (w <= 0 || h <= 0) return null;
+      const glY = ch - y1;
+      const pixels = new Uint8Array(w * h * 4);
+      gl.readPixels(x0, glY, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      let sum = 0;
+      let count = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        sum += 0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
+        count++;
+      }
+      return count ? sum / count : null;
+    }
+
+    const droneLuminance = meanLuminance(left, top, right, bottom);
+
+    // Background = the outer margin rect's mean minus the (weighted-out)
+    // drone rect, approximated by sampling four thin strips around the
+    // drone's bbox rather than the full outer rect (which would still
+    // include the drone itself).
+    const stripSamples = [
+      meanLuminance(left - marginPx, top - marginPx, right + marginPx, top), // above
+      meanLuminance(left - marginPx, bottom, right + marginPx, bottom + marginPx), // below
+      meanLuminance(left - marginPx, top - marginPx, left, bottom + marginPx), // left
+      meanLuminance(right, top - marginPx, right + marginPx, bottom + marginPx), // right
+    ].filter((v) => v !== null);
+    const backgroundLuminance = stripSamples.length
+      ? stripSamples.reduce((a, b) => a + b, 0) / stripSamples.length
+      : null;
+
+    return {
+      droneLuminance,
+      backgroundLuminance,
+      contrastDelta: droneLuminance !== null && backgroundLuminance !== null ? droneLuminance - backgroundLuminance : null,
+      rectPx: { left, top, right, bottom },
+    };
   };
 
   // P2.5 gate (g): mean luminance of the actually-composited frame (post

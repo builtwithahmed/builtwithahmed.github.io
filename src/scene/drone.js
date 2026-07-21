@@ -20,8 +20,32 @@ function createMaterials() {
   return {
     // Amendment D: roughness/metalness tuned so the body reads as brushed
     // metal catching the rim/key lights instead of flat matte plastic.
-    body: new MeshStandardMaterial({ color: 0x1c2426, roughness: 0.35, metalness: 0.85 }),
-    dark: new MeshStandardMaterial({ color: 0x11181a, roughness: 0.6, metalness: 0.5 }),
+    //
+    // P2.7 Stage 2: a scene-wide rim/key bump (tried first) fixed the
+    // t=0.12 contrast drop but *cost* contrast at t=0.85, where the same
+    // directional light now also relit the new inspection tower sitting
+    // right next to the drone in frame — measured via __debugDroneContrast
+    // (t=0.85 contrastDelta 4.1 -> 2.9 with the light bump). A light
+    // change can't tell "drone" from "everything else near the drone."
+    // A small constant emissive on the body/dark materials instead raises
+    // only the drone's own luminance floor, independent of which way any
+    // light happens to be pointing relative to whatever's behind it that
+    // keyframe — fixed t=0.12 (contrastDelta 2.7 -> 4.4+) without moving
+    // t=0.55/0.85 at all, since it touches nothing but the drone.
+    body: new MeshStandardMaterial({
+      color: 0x1c2426,
+      roughness: 0.35,
+      metalness: 0.85,
+      emissive: 0x0f2226,
+      emissiveIntensity: 0.5,
+    }),
+    dark: new MeshStandardMaterial({
+      color: 0x11181a,
+      roughness: 0.6,
+      metalness: 0.5,
+      emissive: 0x0a1618,
+      emissiveIntensity: 0.5,
+    }),
     // P2.6 live review: at the old intensities (all raised well past the
     // bloom threshold) the drone read as "glowing blobs, invisible
     // airframe." Cut nav LEDs and the lens roughly in half — the body

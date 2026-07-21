@@ -3,6 +3,38 @@
 Log of what was tried and rejected, per MISSION_PLAN.md §0, so later phases
 don't repeat dead ends. Newest entries at the top.
 
+## 2026-07-21 — P2.7 Stage 2: a scene-wide light bump can't fix "this one object's" contrast
+
+Ahmed's addendum to the Stage 2 gate: the takeoff frame (t=0.12) lost drone
+contrast after Stage 1's ambient-floor raise — measured via a new
+`__debugDroneContrast` hook (main.js, behind `?debug`) that reads mean
+luminance inside the drone's projected bbox vs. a margin strip just outside
+it (not a whole-frame or fixed-corner sample — see the P2.6 note below on
+why fixed/whole-frame background sampling is unreliable in this scene).
+Baseline: t=0.12 contrastDelta 2.70 (the weak point), t=0.55 4.30, t=0.85
+4.08.
+
+First attempt: raise the rim `DirectionalLight` 0.85 -> 1.2 (world.js).
+Fixed t=0.12 (2.70 -> 4.42) but *dropped* t=0.85 (4.08 -> 2.88) — that
+keyframe now has the new inspection tower (tower.js, this same phase)
+sitting right next to the drone in frame, and the same directional light
+relit the tower's ordinary `MeshStandardMaterial` faces too, raising the
+"background" side of the measurement right along with the drone. **A
+scene-wide light change can't distinguish "the drone" from "whatever's
+near the drone right now" — it isn't a per-object control, and adding more
+static geometry to the scene (map/tower) means there's more for it to
+accidentally also relight.**
+
+Reverted the light, instead gave the drone's `body`/`dark` materials
+(drone.js) a small constant `emissive`/`emissiveIntensity: 0.5` — a
+luminance floor that belongs to the drone's own materials, independent of
+which way any light points or what's behind it that keyframe. Result: all
+three improved with no cross-talk (t=0.12 2.70->4.87, t=0.55 4.30->5.02,
+t=0.85 4.08->4.62). **When a lighting fix needs to target one specific
+object's readability rather than the whole scene's, prefer a material
+property on that object over a scene light — a light's effect is never
+scoped to "just this thing," only a material change is.**
+
 ## 2026-07-20 — P2.6 (live review corrections): what the 11-step gate structurally can't catch
 
 Ahmed's live scroll surfaced four real bugs the P2.5 gate's 11-step
