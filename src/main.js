@@ -3,7 +3,7 @@ import './styles/tokens.css';
 import './styles/layout.css';
 import { createWorld } from './scene/world.js';
 import { createTerrain } from './scene/terrain.js';
-import { createHelipad, createHorizon, createDustRing } from './scene/environment.js';
+import { createHelipad, createHorizon, createDustRing, createSky } from './scene/environment.js';
 import { createDrone } from './scene/drone.js';
 import { detectTier } from './scene/tier.js';
 import { createPostPipeline } from './scene/post.js';
@@ -17,6 +17,8 @@ import { skills } from './content/data.js';
 const canvas = document.getElementById('scene');
 const { renderer, scene, camera } = createWorld(canvas);
 
+const sky = createSky();
+scene.add(sky);
 const terrain = createTerrain();
 scene.add(terrain);
 const helipad = createHelipad(0, 0);
@@ -68,7 +70,6 @@ function tick() {
 
   drone.explode(state.explode, state.explodeScale);
   drone.update(dt, state.dronePos, { time, reducedMotion: state.reducedMotion, flying });
-  terrain.material.uniforms.uDronePos.value.copy(drone.group.position);
   dustRing.update(state.T, state.reducedMotion);
 
   const damp = state.reducedMotion ? 1 : 1 - Math.exp(-4.2 * dt);
@@ -78,6 +79,7 @@ function tick() {
   camLook.lerp(lookTarget, state.reducedMotion ? 1 : damp);
   camera.position.copy(camPos);
   camera.lookAt(camLook);
+  sky.position.copy(camera.position);
 
   // Matrices must be fresh THIS frame before projecting for callouts/debug
   // (three.js otherwise defers world-matrix updates to renderer.render()).
@@ -105,7 +107,11 @@ if (new URLSearchParams(location.search).has('debug')) {
   // P2.6 diagnostics: toggle individual scene layers on/off from a gate
   // script to isolate a visual artifact (which object is actually
   // producing it) without a rebuild per guess.
-  window.__debugLayers = { terrain, helipad, horizon, dustRing: dustRing.mesh, drone: drone.group };
+  window.__debugLayers = { terrain, helipad, horizon, dustRing: dustRing.mesh, drone: drone.group, sky };
+  window.__debugProjectWorld = (x, y, z) => {
+    const p = new Vector3(x, y, z).project(camera);
+    return { x: p.x, y: p.y, z: p.z };
+  };
   window.__debugSetComposer = (enabled) => {
     post.setEnabled?.(enabled);
   };

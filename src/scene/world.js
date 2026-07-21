@@ -47,14 +47,22 @@ export function createWorld(canvas) {
 
   const scene = new Scene();
   scene.background = new Color(0x05080a);
-  scene.fog = new Fog(0x05080a, 14, 85);
+  // P2.7: matched to the new atmospheric sky's horizon color (environment.js
+  // createSky) rather than near-black — fogged geometry now fades into the
+  // same tone the backdrop actually is, instead of a visible seam where
+  // fog-darkened objects met a brighter sky.
+  scene.fog = new Fog(0x0a2229, 14, 85);
 
   const aspect = window.innerWidth / window.innerHeight;
   const camera = new PerspectiveCamera(fovForAspect(aspect), aspect, 0.1, 200);
   camera.position.set(0, 1.8, 7);
   camera.lookAt(0, 0.8, 0);
 
-  const hemi = new HemisphereLight(0x1b4a52, 0x05080a, 0.7);
+  // P2.7: "the whole scene is ~15% brightness" — raised intensity and
+  // lightened the ground component (was matching --bg almost exactly,
+  // i.e. contributing near-nothing) so the grid and mid-field pick up a
+  // visible ambient floor without touching bloom.
+  const hemi = new HemisphereLight(0x1b4a52, 0x0d1a1e, 1.05);
   scene.add(hemi);
   // P2.6 live review: the drone must read as a machine with the composer
   // disabled entirely (gate item f) — it can't depend on bloom to be

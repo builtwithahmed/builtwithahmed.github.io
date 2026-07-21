@@ -14,6 +14,11 @@ import {
   TorusGeometry,
   MeshStandardMaterial,
   MeshBasicMaterial,
+  ShaderMaterial,
+  UniformsUtils,
+  UniformsLib,
+  Color,
+  BackSide,
   DoubleSide,
 } from 'three';
 
@@ -58,12 +63,66 @@ export function createHelipad(x = 0, z = 0) {
   return group;
 }
 
+// P2.7: horizon silhouettes were pure MeshStandardMaterial with no light
+// hitting them from a useful angle at most keyframes — "pure black on
+// near-black," per the live review, even though they carry the scene's
+// entire sense of scale. A real fresnel rim (brighter at grazing angles,
+// independent of whether a directional light happens to graze that face)
+// gives every building a readable edge against the void regardless of
+// camera angle, without needing per-keyframe light tuning.
+const fresnelVertex = /* glsl */ `
+  #include <common>
+  #include <fog_pars_vertex>
+  varying vec3 vNormalV;
+  varying vec3 vViewDir;
+  void main() {
+    vNormalV = normalize(normalMatrix * normal);
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewDir = normalize(-mvPosition.xyz);
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+  }
+`;
+const fresnelFragment = /* glsl */ `
+  #include <common>
+  #include <fog_pars_fragment>
+  varying vec3 vNormalV;
+  varying vec3 vViewDir;
+  uniform vec3 uBaseColor;
+  uniform vec3 uRimColor;
+  uniform float uRimPower;
+  void main() {
+    float fresnel = pow(1.0 - max(dot(normalize(vNormalV), normalize(vViewDir)), 0.0), uRimPower);
+    vec3 color = uBaseColor + uRimColor * fresnel;
+    gl_FragColor = vec4(color, 1.0);
+    #include <fog_fragment>
+  }
+`;
+
+function createFresnelMaterial() {
+  return new ShaderMaterial({
+    vertexShader: fresnelVertex,
+    fragmentShader: fresnelFragment,
+    uniforms: UniformsUtils.merge([
+      UniformsLib.fog,
+      {
+        uBaseColor: { value: new Color(0x050a0c) },
+        // desaturated cyan-grey, low intensity per instruction — this is
+        // an edge cue, not another emissive glow source for bloom to grab.
+        uRimColor: { value: new Color(0x3d5a5f) },
+        uRimPower: { value: 2.2 },
+      },
+    ]),
+    fog: true,
+  });
+}
+
 // 10-14 dark industrial silhouettes at |x| 14-34 with amber/red rooftop
 // beacons (§6.1), spread along the flight corridor so the takeoff/teardown
 // beats have a horizon instead of reading as a void.
 export function createHorizon() {
   const group = new Group();
-  const bodyMat = new MeshStandardMaterial({ color: 0x0d1416, roughness: 0.9 });
+  const bodyMat = createFresnelMaterial();
   const amberMat = new MeshStandardMaterial({ color: 0xffb03a, emissive: 0xffb03a, emissiveIntensity: 1.8 });
   const redMat = new MeshStandardMaterial({ color: 0xff5449, emissive: 0xff5449, emissiveIntensity: 1.8 });
 
@@ -87,6 +146,49 @@ export function createHorizon() {
     }
   }
   return group;
+}
+
+// P2.7: "the whole scene is ~15% brightness... the void should read as
+// air, not absence." A large inverted sphere with a vertical gradient
+// (dark teal-black at the horizon, fading to near-black at the zenith),
+// repositioned onto the camera every frame (main.js) so it always reads
+// as an infinite backdrop rather than a bounded object. depthTest false
+// + renderOrder -1 guarantees it paints behind literal everything else
+// without needing to be perfectly outside the far clip / fog range.
+const skyVertex = /* glsl */ `
+  varying vec3 vPos;
+  void main() {
+    vPos = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const skyFragment = /* glsl */ `
+  varying vec3 vPos;
+  uniform vec3 uHorizonColor;
+  uniform vec3 uZenithColor;
+  void main() {
+    float h = clamp(normalize(vPos).y * 0.5 + 0.5, 0.0, 1.0);
+    vec3 color = mix(uHorizonColor, uZenithColor, h);
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+export function createSky() {
+  const geometry = new SphereGeometry(140, 24, 16);
+  const material = new ShaderMaterial({
+    vertexShader: skyVertex,
+    fragmentShader: skyFragment,
+    uniforms: {
+      uHorizonColor: { value: new Color(0x0a2229) },
+      uZenithColor: { value: new Color(0x030509) },
+    },
+    side: BackSide,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const mesh = new Mesh(geometry, material);
+  mesh.renderOrder = -1;
+  return mesh;
 }
 
 // Amendment E: the takeoff beat (T 0.08-0.16) had zero visual content of

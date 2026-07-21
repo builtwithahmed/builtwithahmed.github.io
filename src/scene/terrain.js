@@ -1,30 +1,35 @@
-import {
-  PlaneGeometry,
-  ShaderMaterial,
-  UniformsUtils,
-  UniformsLib,
-  Color,
-  Vector3,
-  Mesh,
-} from 'three';
+import { PlaneGeometry, ShaderMaterial, UniformsUtils, UniformsLib, Color, Mesh } from 'three';
 
 // P2.5 Amendment D: the flat wireframe grid at a uniform 0.85 alpha over a
 // near-black background doesn't register as ground — it needs a reason to
-// be brighter somewhere. Rather than raising --grid itself (a design
-// token, not a per-scene knob), the fragment shader boosts line brightness
-// as a function of distance to the drone's current world position, fed in
-// per frame from main.js via uDronePos. Falls back to the still-slightly-
-// brighter base rate everywhere else so the corridor doesn't look like a
-// spotlight cutout.
+// be brighter somewhere.
+//
+// P2.7: two wrong reasons tried and rejected before this one, both for the
+// same underlying mistake — a RADIAL falloff around a world-space point
+// (first the drone's position, then the camera's) puts a circular bright
+// patch on the ground that, seen through an angled perspective camera,
+// projects as an ellipse. At the hero framing that ellipse sat directly
+// behind the headline ("soft teal oval... reads as a stain") no matter
+// whose position it was centred on — confirmed by disabling the composer
+// and hiding every other candidate mesh, and by measuring: with the
+// camera-relative version, the region behind the hero headline measured
+// ~2x the luminance of an equal-sized region to the side, composer OFF.
+//
+// Fixed by dropping the radial falloff entirely in favour of camera-space
+// depth: how far a point is along the camera's *forward* axis, not its
+// straight-line distance from the camera. This brightens a BAND across
+// the width of the frame at a given distance (following the grid's own
+// perspective lines), not a spotlight centred on any single point — it
+// can't produce an ellipse because it has no centre to project.
 const vertexShader = /* glsl */ `
   #include <common>
   #include <fog_pars_vertex>
   varying vec2 vUv;
-  varying vec3 vWorldPos;
+  varying float vViewDepth;
   void main() {
     vUv = uv;
-    vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewDepth = -mvPosition.z;
     gl_Position = projectionMatrix * mvPosition;
     #include <fog_vertex>
   }
@@ -34,11 +39,11 @@ const fragmentShader = /* glsl */ `
   #include <common>
   #include <fog_pars_fragment>
   varying vec2 vUv;
-  varying vec3 vWorldPos;
+  varying float vViewDepth;
   uniform vec3 uGridColor;
   uniform float uCells;
-  uniform vec3 uDronePos;
-  uniform float uBoostRadius;
+  uniform float uNearDepth;
+  uniform float uFarDepth;
 
   float gridLine(vec2 uv, float cells) {
     vec2 coord = uv * cells;
@@ -49,10 +54,11 @@ const fragmentShader = /* glsl */ `
 
   void main() {
     float line = gridLine(vUv, uCells);
-    float dist = length(vWorldPos.xz - uDronePos.xz);
-    float proximity = 1.0 - smoothstep(0.0, uBoostRadius, dist);
-    vec3 color = uGridColor * (1.6 + proximity * 2.2);
-    float alpha = line * (0.55 + proximity * 0.4);
+    // 1 right in front of the camera, fading to 0 by uFarDepth — a
+    // depth band, not a radius, so it can't project as an ellipse.
+    float proximity = 1.0 - smoothstep(uNearDepth, uFarDepth, vViewDepth);
+    vec3 color = uGridColor * (1.8 + proximity * 1.6);
+    float alpha = line * (0.62 + proximity * 0.3);
     gl_FragColor = vec4(color, alpha);
     #include <fog_fragment>
   }
@@ -78,8 +84,8 @@ export function createTerrain() {
         // design token --grid (§2) — terrain wireframe / hairlines
         uGridColor: { value: new Color(0x0f2b31) },
         uCells: { value: 90 },
-        uDronePos: { value: new Vector3(0, 0, 0) },
-        uBoostRadius: { value: 15 },
+        uNearDepth: { value: 6 },
+        uFarDepth: { value: 40 },
       },
     ]),
     transparent: true,
