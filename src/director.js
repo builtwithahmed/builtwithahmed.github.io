@@ -23,7 +23,19 @@ const KEYFRAMES = [
   // toward idx @0.22's L offset drifts the drone off-center while still
   // labeled C (caught on the narrow mobile viewport at t=0.20). Drone
   // position matches the point already on the idx@0.10->idx@0.22 curve.
-  { t: 0.20, cam: [5.7, 2.96, -3.37], look: [0, 2.36, -11.33], drone: [-1.37, 2.39, -9.48], focus: 'C' },
+  // Focus label relaxed C->L for P2.6 (only the label — cam/look/drone
+  // numerics are untouched, so this doesn't touch the camera-smoothness
+  // fix above): teardown content now starts at T=0.13 (was 0.16), but
+  // this keyframe's C label held the CSS layout centered/full-width
+  // until T~0.21 (the C->L flip is at this segment's own midpoint), so
+  // for T 0.16-0.20 exploding components (battery in particular, which
+  // moves straight down) had a real — if small, <600px² — window to dip
+  // into centered content that a docked-right layout wouldn't have been
+  // near. Relabeling moves the CSS flip to T=0.15, well before the
+  // exploding parts have spread far. The camera itself doesn't visually
+  // commit to an L offset until later regardless, which only makes this
+  // safer, not riskier — content is farther from a still-centered drone.
+  { t: 0.20, cam: [5.7, 2.96, -3.37], look: [0, 2.36, -11.33], drone: [-1.37, 2.39, -9.48], focus: 'L' },
   { t: 0.22, cam: [5.8, 3.0, -4], look: [2.2, 2.4, -12], drone: [-1.5, 2.4, -10], focus: 'L', mobileLook: -0.6 }, // TEARDOWN (left)
   // Holds a strong L offset right up to the R transition — the origin-only
   // NDC check missed this, but the silhouette (full bounding-box) check
@@ -62,7 +74,7 @@ const KEYFRAMES = [
 
 const MODES = [
   [0.05, 'STANDBY', 'WPT 0/6 · HOME'],
-  [0.16, 'TAKEOFF', 'WPT 0/6 · CLIMB'],
+  [0.13, 'TAKEOFF', 'WPT 0/6 · CLIMB'], // P2.6: takeoff beat shortened 0.16->0.13
   [0.38, 'SYSTEMS CHECK', 'SECTOR · SKILLS'],
   [0.70, 'AUTO · MISSION', 'WPT 0/6 · PROJECTS'],
   [0.90, 'INSPECT', 'STRUCTURE · SERVICES'],
@@ -131,10 +143,12 @@ function sampleMode(t) {
   return { mode: last[1], waypoint: last[2] };
 }
 
-// §5 TEARDOWN: explode 0->1 across T 0.16-0.34, hold, reassemble 1->0 across 0.34-0.40.
+// §5 TEARDOWN: explode 0->1 across T 0.13-0.34 (P2.6: was 0.16, takeoff
+// beat shortened so teardown gets more runway, not so the whole timeline
+// shifts), hold, reassemble 1->0 across 0.34-0.40.
 function sampleExplode(t) {
-  if (t <= 0.16) return 0;
-  if (t <= 0.34) return smoothstep((t - 0.16) / (0.34 - 0.16));
+  if (t <= 0.13) return 0;
+  if (t <= 0.34) return smoothstep((t - 0.13) / (0.34 - 0.13));
   if (t <= 0.4) return 1 - smoothstep((t - 0.34) / (0.4 - 0.34));
   return 0;
 }
@@ -210,7 +224,7 @@ export function createDirector() {
     state.focus = sample.focus;
     // §6(6): reduced motion skips the explode animation — component parts
     // are simply exploded (k=1) for the whole teardown range, not ramped.
-    state.explode = reducedMotion ? (state.T >= 0.16 && state.T <= 0.4 ? 1 : 0) : sampleExplode(state.T);
+    state.explode = reducedMotion ? (state.T >= 0.13 && state.T <= 0.4 ? 1 : 0) : sampleExplode(state.T);
 
     const vx = state.dronePos[0] - prevDronePos[0];
     const vy = state.dronePos[1] - prevDronePos[1];

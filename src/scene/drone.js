@@ -22,12 +22,15 @@ function createMaterials() {
     // metal catching the rim/key lights instead of flat matte plastic.
     body: new MeshStandardMaterial({ color: 0x1c2426, roughness: 0.35, metalness: 0.85 }),
     dark: new MeshStandardMaterial({ color: 0x11181a, roughness: 0.6, metalness: 0.5 }),
-    // emissiveIntensity raised well past the bloom threshold (post.js, 0.7)
-    // so nav LEDs / the body stripe / lens actually glow instead of just
-    // being a slightly-lighter cyan.
+    // P2.6 live review: at the old intensities (all raised well past the
+    // bloom threshold) the drone read as "glowing blobs, invisible
+    // airframe." Cut nav LEDs and the lens roughly in half — the body
+    // stripe/antenna tip keep the old cyan value, they weren't singled
+    // out as the problem and still need to read as accents.
     cyan: new MeshStandardMaterial({ color: 0x4fccd8, emissive: 0x4fccd8, emissiveIntensity: 2.2, roughness: 0.3 }),
-    green: new MeshStandardMaterial({ color: 0x38d67a, emissive: 0x38d67a, emissiveIntensity: 1.8 }),
-    red: new MeshStandardMaterial({ color: 0xff5449, emissive: 0xff5449, emissiveIntensity: 1.8 }),
+    lens: new MeshStandardMaterial({ color: 0x4fccd8, emissive: 0x4fccd8, emissiveIntensity: 1.1, roughness: 0.3 }),
+    green: new MeshStandardMaterial({ color: 0x38d67a, emissive: 0x38d67a, emissiveIntensity: 0.9 }),
+    red: new MeshStandardMaterial({ color: 0xff5449, emissive: 0xff5449, emissiveIntensity: 0.9 }),
     rotor: new MeshBasicMaterial({ color: 0x9adfe8, transparent: true, opacity: 0.28, side: DoubleSide }),
   };
 }
@@ -67,7 +70,7 @@ export function createDrone() {
   // gimbal + camera lens -> "Data & Log Analysis"
   const gimbal = new Group();
   const nose = new Mesh(new BoxGeometry(0.16, 0.1, 0.14), mats.dark);
-  const lens = new Mesh(new CylinderGeometry(0.045, 0.045, 0.05, 12), mats.cyan);
+  const lens = new Mesh(new CylinderGeometry(0.045, 0.045, 0.05, 12), mats.lens);
   lens.rotation.x = Math.PI / 2;
   lens.position.set(0, -0.01, 0.08);
   gimbal.add(nose, lens);

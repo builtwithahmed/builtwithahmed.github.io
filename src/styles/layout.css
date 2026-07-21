@@ -7,10 +7,17 @@ section {
   display: block;
 }
 
-/* Heights proportion §5's T-ranges across ~900vh total scroll.
-   No content yet (P1) — these exist purely to drive scroll length. */
-#hero { min-height: 144vh; }     /* T 0.00-0.16 preflight + takeoff */
-#skills { min-height: 252vh; }   /* T 0.16-0.44 teardown + reassemble */
+/* Heights proportion §5's T-ranges across ~900vh total scroll, so each
+   section id's DOM/scroll position matches the T-range that actually
+   displays its content — an anchor jump to #skills must land where
+   teardown content starts, not partway through it.
+   P2.6: takeoff shortened 0.08-0.16 -> 0.08-0.13 (director.js/content.js/
+   callouts.js), so #hero loses 27vh (144->117) and #skills gains it
+   (252->279) to keep the id boundary at T=0.13, matching where teardown
+   content (content.js's TEARDOWN_START) now actually begins. #projects/
+   #services/#contact boundaries (T 0.44/0.76/0.90) are unchanged. */
+#hero { min-height: 117vh; }     /* T 0.00-0.13 preflight + takeoff */
+#skills { min-height: 279vh; }   /* T 0.13-0.44 teardown + reassemble */
 #projects { min-height: 288vh; } /* T 0.44-0.76 mission map + descend */
 #services { min-height: 126vh; } /* T 0.76-0.90 inspection */
 #contact { min-height: 90vh; }   /* T 0.90-1.00 RTL / landing */

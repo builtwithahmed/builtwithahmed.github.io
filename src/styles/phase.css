@@ -1,0 +1,25 @@
+/* P2.6: diegetic flight-phase readout for beats with no section content.
+   Horizontally centred per instruction; pinned to the bottom third
+   (not dead-center) rather than the vertical middle — the drone typically
+   frames in the upper-middle of the shot at these T values, and a
+   screen-centre readout visibly crossed straight through it. A HUD status
+   line, not page content, so it sits outside the Rule of the Empty Half's
+   content-vs-focus contest the same way the persistent telemetry corners
+   do — but it still shouldn't visually cross the subject it's reporting on. */
+#phase-readout {
+  position: fixed;
+  bottom: 14vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  font-family: var(--font-hud);
+  font-size: 13px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--signal);
+  text-shadow: 0 0 12px rgba(79, 204, 216, 0.35);
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0;
+}

@@ -10,10 +10,10 @@ import '../styles/callouts.css';
 import { skills } from '../content/data.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const BAND_START = 0.16;
+const BAND_START = 0.13; // P2.6: takeoff beat shortened 0.16->0.13
 const BAND_END = 0.34;
 const BAND_WIDTH = (BAND_END - BAND_START) / skills.length;
-const SHOW_FROM = 0.16;
+const SHOW_FROM = 0.13;
 const SHOW_UNTIL = 0.4;
 
 export function createCallouts({ camera, drone, mountEl }) {

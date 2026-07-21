@@ -7,7 +7,7 @@ import { identity, teardown } from '../content/data.js';
 
 const HERO_FADE_START = 0.08;
 const HERO_FADE_END = 0.1; // "fades and translates down out of frame by T 0.10"
-const TEARDOWN_START = 0.16;
+const TEARDOWN_START = 0.13; // P2.6: takeoff beat shortened 0.16->0.13
 const TEARDOWN_END = 0.4; // matches the explode/reassemble window
 
 export function createContent() {

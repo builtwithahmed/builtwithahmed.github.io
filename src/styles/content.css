@@ -96,7 +96,11 @@ body[data-layout='split'] #content-stage {
 body[data-layout='split'] .content-block {
   grid-row: 2;
   max-height: calc(100vh - var(--hud-safe-top) - var(--hud-safe-bottom));
-  overflow-y: auto;
+  /* P2.6: overflow-y:auto put a visible scrollbar inside the content box
+     on desktop — a second scroll surface, which is banned. If content
+     doesn't fit its budget, the fix is fewer visible callouts (callouts.js
+     windowing), never a nested scroll. hidden is a clip-only safety net. */
+  overflow: hidden;
 }
 body[data-layout='split'][data-side='L'] .content-block {
   grid-column: 2 / 3;
@@ -123,7 +127,7 @@ body[data-layout='split'][data-side='C'] .content-block {
   text-align: center;
   background: linear-gradient(to top, rgba(5, 8, 10, 0.85), transparent 60%);
   padding: 2vh 24px 3vh;
-  overflow-y: auto; /* safety net — tuned type should fit without scrolling */
+  overflow: hidden; /* clip-only safety net — never a visible scrollbar (P2.6) */
 }
 body[data-layout='split'][data-side='C'] .content-block .ctas { justify-content: center; }
 
@@ -147,7 +151,7 @@ body[data-layout='stack'][data-side='R'] .content-block {
   text-align: left;
   background: linear-gradient(to top, rgba(5, 8, 10, 0.85), transparent 60%);
   padding: 3vh 20px 4vh;
-  overflow-y: auto;
+  overflow: hidden; /* clip-only safety net — never a visible scrollbar (P2.6) */
 }
 body[data-layout='stack'][data-side='C'] .content-block {
   grid-row: 1;
@@ -159,7 +163,7 @@ body[data-layout='stack'][data-side='C'] .content-block {
   text-align: center;
   background: linear-gradient(to top, rgba(5, 8, 10, 0.85), transparent 60%);
   padding: 2vh 20px 3vh;
-  overflow-y: auto;
+  overflow: hidden; /* clip-only safety net — never a visible scrollbar (P2.6) */
 }
 
 @media (max-width: 759px) {

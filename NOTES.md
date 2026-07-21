@@ -3,6 +3,87 @@
 Log of what was tried and rejected, per MISSION_PLAN.md §0, so later phases
 don't repeat dead ends. Newest entries at the top.
 
+## 2026-07-20 — P2.6 (live review corrections): what the 11-step gate structurally can't catch
+
+Ahmed's live scroll surfaced four real bugs the P2.5 gate's 11-step
+screenshot sampling never saw, because each one only existed *between*
+sampled points or only showed up under a specific (untested) toggle:
+
+1. **The "dark red diagonal line."** `terrain.js`'s ground plane was
+   `PlaneGeometry(240, 240, 1, 1)` — exactly two triangles meeting on one
+   corner-to-corner diagonal. `gridLine()`'s `fwidth()`-based line
+   thickness is a per-triangle screen-space derivative; at the seam, a
+   2x2-pixel derivative sample straddling both triangles produced a
+   spurious bright line, invisible in the raw render (confirmed by
+   toggling `post.setEnabled(false)`) but amplified by UnrealBloomPass
+   into a visible line — ACES tone mapping shifts blown highlights warm/
+   red, which is where "red" came from on an otherwise cyan-only shader.
+   Fixed by raising plane segments to 48x48 (spreads any seam artifact
+   across many imperceptible edges instead of one long diagonal one). If
+   a future ground/floor shader reintroduces a low-segment-count plane
+   with a derivative-based line function, expect this again.
+2. **The hero "stain."** The helipad ring/H-mark was emissive
+   (`emissiveIntensity` was the whole point — "give bloom something to
+   catch"). That's exactly backwards for anything meant to read as subtle
+   ground texture under the hero scrim: bloom amplifies precisely the
+   things you emissive-tag. Removed `emissive` entirely from the pad
+   material; it now reads via ordinary key/rim lighting only. **Lesson:
+   emissive is for actual light sources (LEDs, lens, active indicators),
+   never for "make bloom notice this."**
+3. **Nested scrollbar.** `overflow-y: auto` on content-block/callout-
+   stack was a real second scroll surface once six callouts could be
+   simultaneously laid out. Root fix was upstream: cap simultaneously-
+   *rendered* (not just simultaneously-opaque) callouts via a real fade
+   transition (opacity/transform/max-height, 250ms, `visibility: hidden`
+   only after the fade completes) instead of instant `display:none`
+   toggling — see `callouts.css`. All `overflow-y: auto` is gone;
+   remaining `overflow: hidden` is a clip-only safety net, never a
+   visible scrollbar.
+4. **Section id / scroll-range mismatch.** Shortening the takeoff beat
+   (0.16->0.13, see below) moved where teardown content actually starts
+   displaying, but `layout.css`'s section min-heights (which is what
+   controls where `#skills` etc. actually sit in the scroll) weren't
+   touched. **Any time a T-threshold in director.js/content.js/
+   callouts.js changes, check whether layout.css's section heights still
+   proportion correctly against it** — they're two independent systems
+   (content timing vs. scroll-length allocation) that have to be kept in
+   sync by hand, nothing enforces it structurally.
+
+Also found mid-fix, not part of Ahmed's original list: relabeling a
+keyframe's `focus` from 'C' to 'L' (director.js t=0.20) closed 5 small
+real overlaps between exploding components (battery, mostly) and
+newly-earlier teardown content — the camera-hold-neutral keyframe was
+tuned for mobile Table D reasons and kept its CSS-facing focus label at
+'C' (centered/full-width layout) well past where content now needs to be
+docked to a side. Confirmed via testing that only the `focus` *label*
+needed to change, not the cam/look/drone numerics underneath.
+
+**Gate methodology notes for next time:**
+- The "real" overlap test needed ANOTHER revision. P2.5 moved from a
+  Box3 proxy to a pixel-brightness-threshold canvas read. That flaked
+  hard here too: Amendment D's drone-proximity terrain brightening made
+  the *grid itself* cross a brightness threshold across large areas
+  (up to ~30% of a mobile content rect), which isn't what the Rule of
+  the Empty Half cares about at all. Landed on a **point-based test**:
+  project the drone's own origin plus its 6 named components (already
+  exposed via `__debugNDC().components`), and check whether any of those
+  points — not a brightness threshold, not a bounding box — fall inside
+  a visible content rect. This is the same methodology P2.5's Table E
+  already vetted as trustworthy; it should be the default for any future
+  "does the subject overlap this DOM region" check, not a threshold or a
+  proxy shape.
+- A background-luminance sample from a fixed screen corner is not
+  reliable in this scene: `environment.js`'s horizon silhouettes/beacons
+  are placed with `Math.random()` per page load, so a fixed corner
+  occasionally samples a randomly-placed bright beacon and skews the
+  "background" reading. Sample relative to the subject being measured
+  (e.g., directly above the drone's own on-screen position) instead of a
+  fixed absolute screen location.
+- Headless Chromium's rAF throttling (see the entry below) means a
+  51-step-per-viewport gate can occasionally take much longer than
+  expected depending on how throttled that particular run is — budget
+  for it running as a multi-minute background task, not a quick check.
+
 ## 2026-07-20 — P2.5 (art direction revision): spawn-state staleness poisoned t=0 measurements
 
 Two objects had their initial world position/transform hand-duplicated

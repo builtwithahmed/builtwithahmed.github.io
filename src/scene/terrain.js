@@ -59,7 +59,16 @@ const fragmentShader = /* glsl */ `
 `;
 
 export function createTerrain() {
-  const geometry = new PlaneGeometry(240, 240, 1, 1);
+  // P2.6: a 1x1-segment plane is exactly two triangles meeting on one
+  // corner-to-corner diagonal. fwidth()-based derivatives in gridLine()
+  // are computed per-triangle, and at grazing viewing angles the 2x2-pixel
+  // derivative sample straddling that single seam produced a spurious
+  // bright line along it — invisible in the raw render but amplified by
+  // UnrealBloomPass into the "dark red diagonal line" from the P2.6 live
+  // review (ACES tone mapping shifts blown highlights warm/red). Enough
+  // segments spreads any such seam artifact across many small, imperceptible
+  // edges instead of one long diagonal one.
+  const geometry = new PlaneGeometry(240, 240, 48, 48);
   const material = new ShaderMaterial({
     vertexShader,
     fragmentShader,

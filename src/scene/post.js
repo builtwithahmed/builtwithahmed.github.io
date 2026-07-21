@@ -25,12 +25,13 @@ export function createPostPipeline(renderer, scene, camera, tier) {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
-  // First pass at 0.8/0.4/0.7 blew every emissive into a giant soft-white
-  // blob (helipad ring, dust ring, even the drone body) that swallowed
-  // legibility — see P2.5 gate screenshots. Backed off strength and raised
-  // threshold so only genuinely bright emissive points catch bloom, not
-  // anything moderately lit by the key/rim lights.
-  const bloom = new UnrealBloomPass(size, 0.4, 0.35, 0.82);
+  // P2.5 first pass (0.8/0.4/0.7) blew every emissive into a soft-white
+  // blob. P2.6 live review: even the corrected 0.4/0.35/0.82 still read as
+  // "glowing blobs, invisible airframe" — the drone must be legible from
+  // its own lit geometry, with bloom only as a small accent on genuinely
+  // bright points (nav LEDs, lens, pad ring), never as the thing that
+  // makes the body visible at all.
+  const bloom = new UnrealBloomPass(size, 0.25, 0.35, 0.9);
   composer.addPass(bloom);
 
   const vignette = new ShaderPass(VignetteShader);
@@ -50,9 +51,18 @@ export function createPostPipeline(renderer, scene, camera, tier) {
     composer.setSize(window.innerWidth, window.innerHeight);
   }
 
+  let enabled = true;
+  // P2.6 gate (f): render with the composer fully bypassed, so the drone's
+  // legibility can be verified against its own lit geometry alone, with
+  // no bloom/vignette/grain contribution at all.
+  function setEnabled(next) {
+    enabled = next;
+  }
+
   return {
-    render: () => composer.render(),
+    render: () => (enabled ? composer.render() : renderer.render(scene, camera)),
     resize,
+    setEnabled,
     bloom,
   };
 }

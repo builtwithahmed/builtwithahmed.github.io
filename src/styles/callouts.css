@@ -11,6 +11,7 @@
   stroke: var(--signal);
   stroke-width: 1;
   opacity: 0;
+  transition: opacity 250ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .callout-line.active {
   stroke: var(--warn);
@@ -20,6 +21,7 @@
 .callout-dot {
   fill: var(--signal);
   opacity: 0.2;
+  transition: opacity 250ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .callout-dot.active {
   fill: var(--warn);
@@ -33,17 +35,47 @@
   gap: 2px;
 }
 
+/* P2.6 live review: display:none windowing made callouts pop in/out of
+   the stack instantly, and the resulting undersized/oversized box needed
+   a nested overflow:auto scrollbar to cope — a second scroll surface,
+   which is banned outright. Fix: items always participate in layout
+   (never display:none), and the WINDOWED-vs-not state is expressed as a
+   250ms opacity/transform/max-height fade instead of an instant toggle.
+   Only a faded-out item's max-height collapsing to 0 removes its space
+   from the stack, and that collapse is itself animated — no instant pop,
+   no scrollbar, and the stack's rendered height stays bounded by however
+   many items are in the "visible" window (callouts.js still caps that
+   to 3 desktop / 2 mobile). visibility flips to hidden only once the
+   opacity/transform fade-out has actually finished (transition-delay on
+   visibility alone, only in the "leaving" direction). */
 .callout-label {
-  display: none;
-  /* Amendment F: inactive callouts read as "queued", not equal-weight list
-     items — dropped from 0.45 so only the active one competes for attention. */
-  opacity: 0.2;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(79, 204, 216, 0.1);
+  visibility: hidden;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transform: translateY(8px);
+  padding: 0;
+  border-bottom: 1px solid transparent;
+  transition:
+    opacity 250ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
+    max-height 250ms cubic-bezier(0.16, 1, 0.3, 1),
+    padding 250ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 250ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 250ms;
 }
-.callout-label:last-child { border-bottom: 0; }
-.callout-label.visible { display: block; }
-.callout-label.active { opacity: 1; }
+.callout-label.visible {
+  visibility: visible;
+  /* inactive-but-in-window reads as "queued," not equal-weight — dimmed
+     rather than hidden so the crossfade always has something on screen. */
+  opacity: 0.2;
+  max-height: 240px;
+  transform: translateY(0);
+  padding: 10px 0;
+  border-bottom-color: rgba(79, 204, 216, 0.1);
+  transition-delay: 0s;
+}
+.callout-label.visible.active { opacity: 1; }
 
 .callout-label h3 {
   font-family: var(--font-display);
@@ -63,12 +95,16 @@
 
 .callout-label .tags {
   /* Amendment F: tags are detail that only the active callout earns. */
-  display: none;
+  display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 7px;
+  margin-top: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), max-height 200ms cubic-bezier(0.16, 1, 0.3, 1), margin-top 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-.callout-label.active .tags { display: flex; }
+.callout-label.active .tags { max-height: 60px; opacity: 1; margin-top: 7px; }
 .callout-label .tag {
   font-family: var(--font-hud);
   font-size: 0.66rem;
@@ -83,4 +119,13 @@
   color: var(--warn);
   border-color: rgba(255, 176, 58, 0.3);
   background: rgba(255, 176, 58, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .callout-label,
+  .callout-label .tags,
+  .callout-line,
+  .callout-dot {
+    transition: none;
+  }
 }

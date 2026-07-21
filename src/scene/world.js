@@ -56,14 +56,16 @@ export function createWorld(canvas) {
 
   const hemi = new HemisphereLight(0x1b4a52, 0x05080a, 0.7);
   scene.add(hemi);
-  const key = new DirectionalLight(0x9adfe8, 0.8);
+  // P2.6 live review: the drone must read as a machine with the composer
+  // disabled entirely (gate item f) — it can't depend on bloom to be
+  // visible. Raised from 0.8 so the body/arms/canopy have real lit form.
+  const key = new DirectionalLight(0x9adfe8, 1.3);
   key.position.set(6, 12, 6);
   scene.add(key);
-  // Amendment D: a dim cyan rim light from behind-camera-left so the
-  // drone's silhouette edges catch light against the void instead of
-  // reading as a flat smudge — the hemi+key alone left the drone underlit
-  // from the camera's vantage.
-  const rim = new DirectionalLight(0x4fccd8, 0.45);
+  // Amendment D: a cyan rim light from behind-camera-left so the drone's
+  // silhouette edges catch light against the void instead of reading as a
+  // flat smudge. Raised alongside the key light for the same reason.
+  const rim = new DirectionalLight(0x4fccd8, 0.85);
   rim.position.set(-8, 4, 10);
   scene.add(rim);
 

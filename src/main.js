@@ -11,6 +11,7 @@ import { createDirector } from './director.js';
 import { createTelemetry } from './hud/telemetry.js';
 import { createContent } from './hud/content.js';
 import { createCallouts } from './hud/callouts.js';
+import { createPhaseReadout } from './hud/phase.js';
 import { skills } from './content/data.js';
 
 const canvas = document.getElementById('scene');
@@ -18,7 +19,8 @@ const { renderer, scene, camera } = createWorld(canvas);
 
 const terrain = createTerrain();
 scene.add(terrain);
-scene.add(createHelipad(0, 0));
+const helipad = createHelipad(0, 0);
+scene.add(helipad);
 const horizon = createHorizon();
 scene.add(horizon);
 const dustRing = createDustRing(0, 0);
@@ -47,6 +49,7 @@ window.addEventListener('resize', () => post.resize());
 const telemetry = createTelemetry();
 const content = createContent();
 const callouts = createCallouts({ camera, drone, mountEl: content.calloutStack });
+const phase = createPhaseReadout();
 
 const timer = new Timer();
 const camPos = new Vector3(...director.state.cam);
@@ -84,6 +87,7 @@ function tick() {
   telemetry.update(state, time);
   content.update(state);
   callouts.update(state);
+  phase.update(state);
 
   post.render();
 }
@@ -98,6 +102,14 @@ tick();
 // requesting `?debug` — an `import.meta.env.DEV` guard would've made this
 // unreachable against `preview` entirely.
 if (new URLSearchParams(location.search).has('debug')) {
+  // P2.6 diagnostics: toggle individual scene layers on/off from a gate
+  // script to isolate a visual artifact (which object is actually
+  // producing it) without a rebuild per guess.
+  window.__debugLayers = { terrain, helipad, horizon, dustRing: dustRing.mesh, drone: drone.group };
+  window.__debugSetComposer = (enabled) => {
+    post.setEnabled?.(enabled);
+  };
+
   // Cheap enough to poll at high frequency — gate scripts use this to wait
   // for actual convergence after an instant scroll jump instead of a fixed
   // wall-clock delay. Fixed delays are unreliable here: headless Chromium
@@ -203,6 +215,50 @@ if (new URLSearchParams(location.search).has('debug')) {
         count++;
       }
       return { meanLuminance: count ? sum / count : 0 };
+    });
+  };
+
+  // P2.6 gate (c): same real-pixel methodology as __debugSilhouetteOverlap,
+  // but returns a literal intersecting-pixel COUNT per rect (not just a
+  // mean) so the gate can report "every intersection with its t value and
+  // pixel count" as asked, at 0.02-increment resolution across the whole
+  // scroll — not just the 11 sampled screenshot steps.
+  window.__debugOverlap = (rects) => {
+    const gl = renderer.getContext();
+    const dpr = renderer.getPixelRatio();
+    const cw = canvas.width;
+    const ch = canvas.height;
+
+    const framePixels = new Uint8Array(cw * ch * 4);
+    gl.readPixels(0, 0, cw, ch, gl.RGBA, gl.UNSIGNED_BYTE, framePixels);
+    let fsum = 0;
+    let fcount = 0;
+    for (let i = 0; i < framePixels.length; i += 4 * 16) {
+      fsum += 0.2126 * framePixels[i] + 0.7152 * framePixels[i + 1] + 0.0722 * framePixels[i + 2];
+      fcount++;
+    }
+    const frameMean = fcount ? fsum / fcount : 0;
+    const threshold = frameMean + 15;
+
+    return rects.map((r) => {
+      const x0 = Math.max(0, Math.floor(r.left * dpr));
+      const x1 = Math.min(cw, Math.ceil(r.right * dpr));
+      const y0 = Math.max(0, Math.floor(r.top * dpr));
+      const y1 = Math.min(ch, Math.ceil(r.bottom * dpr));
+      const w = x1 - x0;
+      const h = y1 - y0;
+      if (w <= 0 || h <= 0) return { pixelsChecked: 0, brightPixels: 0, frameMean };
+      const glY = ch - y1;
+      const pixels = new Uint8Array(w * h * 4);
+      gl.readPixels(x0, glY, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      let bright = 0;
+      let checked = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const lum = 0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
+        if (lum > threshold) bright++;
+        checked++;
+      }
+      return { pixelsChecked: checked, brightPixels: bright, frameMean };
     });
   };
 

@@ -27,22 +27,16 @@ export function createHelipad(x = 0, z = 0) {
   base.rotation.x = -Math.PI / 2;
   group.add(base);
 
-  // Emissive so it reads against the void and gives bloom something to
-  // catch in the hero frame, per Amendment D "hero frame must show ground."
-  // Started at 1.6 opaque and, combined with the close t=0 camera
-  // (Amendment D-a), bloomed into a giant solid ring that visually fought
-  // the hero copy for attention — text stayed technically legible (DOM
-  // stacks above the canvas regardless) but it read as a bullseye behind
-  // the CTAs, not ground dressing. transparent+opacity lets it recede
-  // into "detail," not "graphic."
+  // P2.5 made this emissive so it'd "read against the void" — P2.6 live
+  // review: that emissive is exactly what bloom turns into the "large
+  // soft teal oval" stain behind the hero headline. It's a painted
+  // marking, not a light source; it should read via the key/rim lights
+  // like the rest of the pad, not glow on its own. No `emissive` at all,
+  // so it can never catch bloom regardless of tuning elsewhere.
   const markMat = new MeshStandardMaterial({
-    color: 0x0d2226,
-    emissive: 0x4fccd8,
-    emissiveIntensity: 0.45,
-    roughness: 0.3,
-    metalness: 0.4,
-    transparent: true,
-    opacity: 0.32,
+    color: 0x1c4650,
+    roughness: 0.35,
+    metalness: 0.5,
   });
 
   const ring = new Mesh(new RingGeometry(1.48, 1.64, 40), markMat);
