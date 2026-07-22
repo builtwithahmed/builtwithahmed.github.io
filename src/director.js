@@ -60,16 +60,46 @@ const KEYFRAMES = [
   // NDC gate at t=0.70). Drone position here matches the point already on
   // the idx@0.60->idx@0.72 curve at t=0.70 — only cam/look were retuned.
   { t: 0.70, cam: [6.06, 5.48, -29.33], look: [-9, 2.45, -37.4], drone: [-0.22, 2.87, -35.33], focus: 'R', mobileLook: -6.3 },
-  { t: 0.72, cam: [6.5, 5.0, -30], look: [0, 2.5, -38], drone: [0, 2.8, -36], focus: 'C', mobileLook: 0 }, // descend to structure
+  // P2.7 Stage 2: relabeled 'C' -> 'L' (numerics untouched — same precedent
+  // as the t=0.20 relabel above). This keyframe and t=0.84 were both
+  // already 'L'-adjacent, but the short 'C' label here forced content to
+  // the bottom-third layout for one segment right in the middle of the
+  // inspection act's dock window, which the services terminal (content.js)
+  // needs to occupy continuously from ~0.71 to ~0.87. Since both flanking
+  // beats are "empty transition"/orbit shots with no drone-side framing
+  // requirement of their own, committing this one to 'L' merges the two
+  // segments into one stable dock window instead of flickering through
+  // bottom-third and back.
+  { t: 0.72, cam: [6.5, 5.0, -30], look: [0, 2.5, -38], drone: [0, 2.8, -36], focus: 'L', mobileLook: 0 }, // descend to structure
   { t: 0.84, cam: [4.8, 5.2, -40], look: [2.0, 4.5, -44], drone: [-1.2, 4.6, -42.5], focus: 'L', mobileLook: -1.15 }, // INSPECTION
   // Amendment B gate: raw interpolation between the INSPECTION orbit and
   // the RTL descent swings well left of center despite both endpoints'
   // look-at being fairly neutral — same "swing between distinct camera
   // setups overshoots mid-transition" issue as t=0.40 above. Drone
   // position matches the existing idx@0.84->idx@0.93 curve.
-  { t: 0.9, cam: [3.84, 4.31, -45.19], look: [-4.0, 2.28, -51.41], drone: [0.06, 3.12, -48.06], focus: 'C', mobileLook: -4.0 },
-  { t: 0.93, cam: [3.5, 4.0, -47], look: [0, 1.5, -54], drone: [0.5, 2.6, -50], focus: 'C' }, // RTL
-  { t: 1.00, cam: [0, 5.2, -48.5], look: [0, 0.5, -55], drone: [0, 0.3, -55], focus: 'C' }, // LANDING
+  // P2.7 back-half fix: relabeled 'C' -> 'R' across all three landing
+  // keyframes (numerics retuned to match, see below) so the landing
+  // content can dock LEFT *legitimately* per this codebase's own L/R
+  // convention (content.css: data-side='R' -> 3D on the right, content
+  // docks column 1/left — same convention the mission-map and inspection
+  // acts already use), instead of console.css silently forcing a
+  // left-dock under a 'C' label. That silent override capped at the
+  // generic C-rule's 32vh, which is why the contact platform grid was
+  // clipping two of its four links — a real 'R' label gets the same
+  // vertical room the skills/mission/inspection blocks already get.
+  // Pad-B moved off-axis to (3.0, 0, -55) (main.js) so the drone has
+  // somewhere to actually be at NDC x > 0 when it lands, rather than
+  // faking the offset with camera angle alone while the pad stays at
+  // world x=0 — the same pattern the inspection tower already uses
+  // (off-axis at x=-4.2, not centered).
+  { t: 0.9, cam: [2.6, 4.6, -44], look: [-2.0, 2.3, -50], drone: [1.2, 3.0, -47], focus: 'R', mobileLook: -2.0 },
+  { t: 0.93, cam: [2.2, 4.3, -47], look: [-2.2, 1.7, -53], drone: [2.4, 2.6, -52], focus: 'R', mobileLook: -1.5 }, // RTL
+  // P2.7 Stage 2: drone.y tightened 0.3 -> 0.22 — the skids/legs (drone.js,
+  // local y -0.2/-0.21) were still hovering ~0.16 above Pad-B's surface
+  // (y=0.02) at the old value, not "settled." 0.22 puts the leg bottoms
+  // right at the pad, a real touchdown rather than a close hover.
+  { t: 1.00, cam: [1.0, 5.0, -49], look: [-1.5, 0.6, -55], drone: [3.0, 0.22, -55], focus: 'R', mobileLook: -1.5 }, // LANDING, on Pad-B
+
 ];
 
 const MODES = [

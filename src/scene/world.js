@@ -77,6 +77,14 @@ export function createWorld(canvas) {
   rim.position.set(-8, 4, 10);
   scene.add(rim);
 
+  // Low-intensity camera-follow fill so whatever the viewer is looking at
+  // never collapses into a black void during the mission / inspection / RTL
+  // beats. The target is added to the scene graph once here and updated per
+  // frame from main.js.
+  const fill = new DirectionalLight(0x5a7a80, 0.48);
+  scene.add(fill);
+  scene.add(fill.target);
+
   window.addEventListener('resize', () => {
     const nextAspect = window.innerWidth / window.innerHeight;
     camera.aspect = nextAspect;
@@ -85,5 +93,5 @@ export function createWorld(canvas) {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { renderer, scene, camera };
+  return { renderer, scene, camera, fillLight: fill };
 }

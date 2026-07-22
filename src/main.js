@@ -13,11 +13,12 @@ import { createDirector } from './director.js';
 import { createTelemetry } from './hud/telemetry.js';
 import { createContent } from './hud/content.js';
 import { createCallouts } from './hud/callouts.js';
+import { createProjectCallouts } from './hud/projectCallouts.js';
 import { createPhaseReadout } from './hud/phase.js';
 import { skills } from './content/data.js';
 
 const canvas = document.getElementById('scene');
-const { renderer, scene, camera } = createWorld(canvas);
+const { renderer, scene, camera, fillLight } = createWorld(canvas);
 
 const sky = createSky();
 scene.add(sky);
@@ -25,6 +26,12 @@ const terrain = createTerrain();
 scene.add(terrain);
 const helipad = createHelipad(0, 0);
 scene.add(helipad);
+// Off-axis (matches the inspection tower's x=-4.2 pattern) so the drone
+// has an actual right-of-centre world position to land at t=1.00, rather
+// than the framing faking a right offset via camera angle alone while the
+// pad stays on the centreline (director.js, landing keyframes).
+const landingPad = createHelipad(3.0, -55);
+scene.add(landingPad);
 const horizon = createHorizon();
 scene.add(horizon);
 const dustRing = createDustRing(0, 0);
@@ -57,6 +64,7 @@ window.addEventListener('resize', () => post.resize());
 const telemetry = createTelemetry();
 const content = createContent();
 const callouts = createCallouts({ camera, drone, mountEl: content.calloutStack });
+const projectCallouts = createProjectCallouts({ camera, waypoints: map.waypoints, mountEl: content.projectStack });
 const phase = createPhaseReadout();
 
 const timer = new Timer();
@@ -87,6 +95,8 @@ function tick() {
   camLook.lerp(lookTarget, state.reducedMotion ? 1 : damp);
   camera.position.copy(camPos);
   camera.lookAt(camLook);
+  fillLight.position.copy(camera.position);
+  fillLight.target.position.copy(camLook);
   sky.position.copy(camera.position);
 
   // Matrices must be fresh THIS frame before projecting for callouts/debug
@@ -97,6 +107,7 @@ function tick() {
   telemetry.update(state, time);
   content.update(state);
   callouts.update(state);
+  projectCallouts.update(state);
   phase.update(state);
 
   post.render();
@@ -118,12 +129,14 @@ if (new URLSearchParams(location.search).has('debug')) {
   window.__debugLayers = {
     terrain,
     helipad,
+    landingPad,
     horizon,
     dustRing: dustRing.mesh,
     drone: drone.group,
     sky,
     map: map.group,
     tower: tower.group,
+    fillLight,
   };
   window.__debugProjectWorld = (x, y, z) => {
     const p = new Vector3(x, y, z).project(camera);
@@ -293,8 +306,10 @@ if (new URLSearchParams(location.search).has('debug')) {
   // or dark void far from the drone would dilute/inflate a whole-frame
   // comparison and not reflect what "against its immediate background"
   // actually means).
-  window.__debugDroneContrast = (marginPx = 40) => {
-    const box = new Box3().setFromObject(drone.group);
+  window.__debugDroneContrast = (targetOrMarginPx = drone.group, marginPx = 40) => {
+    const target = typeof targetOrMarginPx === 'number' ? drone.group : targetOrMarginPx;
+    const margin = typeof targetOrMarginPx === 'number' ? targetOrMarginPx : marginPx;
+    const box = new Box3().setFromObject(target);
     const corner = new Vector3();
     let minX = Infinity;
     let maxX = -Infinity;
@@ -353,10 +368,10 @@ if (new URLSearchParams(location.search).has('debug')) {
     // drone's bbox rather than the full outer rect (which would still
     // include the drone itself).
     const stripSamples = [
-      meanLuminance(left - marginPx, top - marginPx, right + marginPx, top), // above
-      meanLuminance(left - marginPx, bottom, right + marginPx, bottom + marginPx), // below
-      meanLuminance(left - marginPx, top - marginPx, left, bottom + marginPx), // left
-      meanLuminance(right, top - marginPx, right + marginPx, bottom + marginPx), // right
+      meanLuminance(left - margin, top - margin, right + margin, top), // above
+      meanLuminance(left - margin, bottom, right + margin, bottom + margin), // below
+      meanLuminance(left - margin, top - margin, left, bottom + margin), // left
+      meanLuminance(right, top - margin, right + margin, bottom + margin), // right
     ].filter((v) => v !== null);
     const backgroundLuminance = stripSamples.length
       ? stripSamples.reduce((a, b) => a + b, 0) / stripSamples.length

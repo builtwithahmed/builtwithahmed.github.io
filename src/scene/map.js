@@ -116,5 +116,9 @@ export function createMap() {
     });
   }
 
-  return { group, update };
+  // Exposed so hud/projectCallouts.js can anchor project labels to the
+  // same waypoint objects that draw amber->green on the ground — one
+  // real 3D object serving both the map visualization and the callout
+  // system, not two separate representations of "waypoint 3."
+  return { group, update, waypoints };
 }

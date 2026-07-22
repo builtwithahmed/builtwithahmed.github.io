@@ -3,6 +3,79 @@
 Log of what was tried and rejected, per MISSION_PLAN.md §0, so later phases
 don't repeat dead ends. Newest entries at the top.
 
+## 2026-07-21 — Back-half content pass: verification found 3 issues, all fixed
+
+A first pass at back-half content (mission console, services terminal,
+landing/contact — done via a different coding agent, then verified here)
+built everything but shipped three real defects the existing gates didn't
+catch, because none of them were a Rule-of-Empty-Half overlap:
+
+1. **A literal dead frame at T 0.875-0.90.** The services terminal ends
+   at T=0.87, the landing block starts at T~0.90 — nothing was scheduled
+   in between. Confirmed by direct DOM inspection (zero visible
+   `.content-block`, no `#phase-readout`), not just by eyeballing a
+   screenshot. Fixed with a phase-readout beat ("RTL · PAD-B"). This
+   is also why a **permanent anti-emptiness assertion** was added to the
+   gate script pattern (not committed as a script, but every future gate
+   run should include it): at every T step, assert at least one of
+   {visible content-block, visible callout-label, visible console-row,
+   phase-readout} is at opacity >= 0.9. Re-running this stricter check
+   against the *whole* timeline (not just the new beat) surfaced two more
+   sub-threshold dips at t=0.12 and t=0.44 that predate this phase
+   entirely — same root cause, smaller, previously below what any prior
+   gate checked for.
+2. **Landing contact links clipped** — 2 of 4 on desktop, 3 of 4 on
+   mobile — because the block was capped at the generic centered-act
+   32vh/41vh budget while its real content needed roughly double that.
+3. **The cap in #2 existed because of a silent rule violation**: the
+   landing keyframes were labelled `focus:'C'` but a CSS override forced
+   the block into a side dock anyway, invisibly, with no comment. The
+   honest fix — relabel the keyframes so the layout matches what's
+   actually drawn (see below), not raise a centered block's height until
+   it collides with the 3D subject.
+
+**Root-cause pattern for #1 (write this down, it will recur):** any beat
+boundary where a phase-readout's fade-out ends exactly on the T value
+where the next `.content-block` starts being drawn is a latent gap,
+because damped `T` approaches a scroll target asymptotically and *never
+exactly reaches it* (documented elsewhere in this file) — a screenshot
+taken at nominal "t=0.90" may have actually converged to T=0.8991, just
+under a `T >= 0.90` display threshold. The fix isn't a wider fade *inside*
+the named span, it's padding the fade *outside* it: `{ from: to - FADE,
+to: boundary + FADE }` so the plateau (both fade-in and fade-out clamp to
+1) covers exactly the span that must read as solid, with the actual
+crossfade happening entirely before/after. Applied to all three affected
+beats (`hud/phase.js`).
+
+**Focus-label semantics, restated because it's easy to get backwards:**
+in this codebase, `focus:'L'` means the 3D subject is on the left and
+content docks RIGHT; `focus:'R'` is the mirror. A request to "put the
+drone on the right and dock content left" is `focus:'R'`, not `'L'` —
+confirm against `content.css`'s `[data-side='L']`/`[data-side='R']`
+rules before relabeling a keyframe, not by intuition about what L/R
+"should" mean.
+
+**CSS specificity trap when overriding a generic per-side rule:** the
+first attempt at widening the mobile landing block's height budget used
+`body[data-layout='stack'] .landing-block { max-height: 62vh; }` and had
+*zero effect* — silently outweighed by content.css's own
+`body[data-layout='stack'][data-side='L'] .content-block,
+[data-side='R'] .content-block { max-height: 41vh; ... }`, which has
+one more attribute selector and therefore wins the cascade regardless of
+import order. Any override of a `[data-layout][data-side] .content-block`
+rule must match that same selector shape — `[data-layout='stack']
+[data-side='R'] .landing-block` — or it silently loses. Don't assume "my
+rule loads later" is enough; check specificity first.
+
+**Off-axis static geometry, not camera-angle-only framing, for a new
+focus side:** to get the drone/Pad-B to project into the right half at
+the new landing framing, Pad-B was moved off the world-x=0 centerline to
+x=3.0 (main.js) — the same pattern the inspection tower already used
+(x=-4.2) — rather than trying to fake the offset with camera angle alone
+while the pad stayed centered. Verified empirically via
+`__debugNDC().ndcX` at each keyframe (target: 0.05-0.9), not hand-derived
+— consistent with every other framing decision in this file.
+
 ## 2026-07-21 — P2.7 Stage 2: a scene-wide light bump can't fix "this one object's" contrast
 
 Ahmed's addendum to the Stage 2 gate: the takeoff frame (t=0.12) lost drone
