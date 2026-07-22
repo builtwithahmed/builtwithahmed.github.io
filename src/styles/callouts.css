@@ -89,8 +89,9 @@
 .callout-label p {
   font-family: var(--font-body);
   font-size: 0.85rem;
-  color: var(--ink-dim);
+  color: var(--ink-dim-blurb);
   line-height: 1.5;
+  max-width: 42ch;
 }
 
 .callout-label .tags {
@@ -107,13 +108,13 @@
 .callout-label.active .tags { max-height: 60px; opacity: 1; margin-top: 7px; }
 .callout-label .tag {
   font-family: var(--font-hud);
-  font-size: 0.66rem;
+  font-size: 11px;
   color: var(--ink-dim);
   border: 1px solid rgba(79, 204, 216, 0.14);
   background: rgba(79, 204, 216, 0.05);
-  padding: 2px 8px;
+  padding: 2px 10px;
   border-radius: 5px;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
 }
 .callout-label.active .tag {
   color: var(--warn);

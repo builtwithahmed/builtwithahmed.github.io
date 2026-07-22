@@ -9,6 +9,18 @@
   --warn: #ffb03a;
   --alert: #ff5449;
 
+  /* v1.1-A #3: blurb/body copy inside content blocks read slightly too
+     dim against the scene at --ink-dim. A dedicated token (not a change
+     to --ink-dim itself) so HUD telemetry/mode text, which also reads
+     --ink-dim, is left untouched. */
+  --ink-dim-blurb: #8a9a9a;
+
+  /* v1.1-A #9: the single canonical left inset — #content-stage's own
+     padding — that HUD corner brackets and left-docked content now both
+     align to exactly, instead of each carrying its own slightly
+     different value. */
+  --content-inset: 24px;
+
   /* Bands reserved for the persistent HUD (hud.css) so content-stage grid
      rows can never place a content-block underneath it (P2.5 defect 2). */
   --hud-safe-top: 60px;

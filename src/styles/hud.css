@@ -12,9 +12,14 @@
   height: 26px;
   border: 1px solid rgba(79, 204, 216, 0.35);
 }
-.hud-corner.tl { top: 20px; left: 18px; border-right: 0; border-bottom: 0; }
+/* v1.1-A #9: left corners align to --content-inset (content-stage's own
+   padding), the same value now used for the eyebrow/heading/row left edge
+   of any left-docked content-block, instead of a separate hand-picked
+   18px. Right corners are untouched — they aren't part of the left-margin
+   consistency ask. */
+.hud-corner.tl { top: 20px; left: var(--content-inset); border-right: 0; border-bottom: 0; }
 .hud-corner.tr { top: 20px; right: 18px; border-left: 0; border-bottom: 0; }
-.hud-corner.bl { bottom: 18px; left: 18px; border-right: 0; border-top: 0; }
+.hud-corner.bl { bottom: 18px; left: var(--content-inset); border-right: 0; border-top: 0; }
 .hud-corner.br { bottom: 18px; right: 18px; border-left: 0; border-top: 0; }
 
 .hud-tele {

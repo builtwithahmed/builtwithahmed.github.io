@@ -3,6 +3,32 @@
 Log of what was tried and rejected, per MISSION_PLAN.md §0, so later phases
 don't repeat dead ends. Newest entries at the top.
 
+## 2026-07-22 — v1.1-A typography/placement pass: gate clean, one pre-existing overflow surfaced (not fixed, out of scope)
+
+Nine targeted fixes (email uppercase/@ collision, h2 scale+tracking+margin,
+`--ink-dim-blurb` for body copy only, 42ch line caps, tag chip size, `.content-block
+h2 { text-wrap: balance }`, mobile phase-readout/content-band suppression, landing-block
+vertical nudge, unified `--content-inset` for HUD corners + left-docked content). Official
+gate (build gz, verify, 51-step point-based overlap + anti-emptiness, both viewports) is
+clean — 0 failures.
+
+**A stricter check invented for this pass (not part of the official gate) found something
+real but out of scope.** Added a `scrollHeight > clientHeight` clip check on top of the
+official overlap/anti-emptiness gate, since #2 and #4 touch heading size and line length —
+the things most likely to push content past its mobile budget. It flagged `project-block`
+and `inspection-block` overflowing their 41vh (346px) mobile budget by up to ~360px at
+T 0.78-0.86. Verified via `git stash` against the pre-pass build: **this already existed**
+(baseline overflow up to ~337px at the same T values) — root cause is that `.console-row`/
+project cards accumulate and stay visible for the rest of their act once revealed (no
+windowing), unlike `callouts.js` which caps its visible window at 2-3 items specifically to
+avoid this. The h2 size bump (item 2, explicitly requested) adds ~21px more on top of an
+already-broken budget; capping `.console-row p`/`.callout-label p` at 42ch (item 4) measured
+zero additional effect (rows were already narrower than 42ch on mobile). **Not fixed here** —
+giving services/projects the same reveal-and-window treatment callouts.js already has is a
+real scope item for a future pass, not a typography fix, and this pass's brief was
+explicitly "not a redesign." Flagging the cost before committing to a fix, per the Amendment
+B precedent below.
+
 ## 2026-07-21 — Back-half content pass: verification found 3 issues, all fixed
 
 A first pass at back-half content (mission console, services terminal,

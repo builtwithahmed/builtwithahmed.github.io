@@ -7,7 +7,7 @@
 .project-block .sub,
 .inspection-block .sub,
 .landing-block .sub {
-  max-width: 44ch;
+  max-width: 42ch;
 }
 
 .project-block .project-stack {
@@ -56,6 +56,19 @@ body[data-layout='stack'][data-side='R'] .landing-block {
    height budget until it collided with the drone. */
 body[data-layout='split'] .landing-block {
   width: 24vw;
+  /* v1.1-A #8: the block's own optical middle (it's shorter than the
+     generic split budget it's centred within) sat noticeably above the
+     drone/pad group's centre on the right at T 0.90-1.00 — nudge down so
+     the two centres are closer together. Measured via __debugNDC at
+     T=0.97 (1440x900): drone centre ~618px from top vs. the block's own
+     (pre-nudge) centre ~405px, a 213px gap. 10vh (90px) is as far as this
+     can go — the block's bottom edge is already within ~30px of
+     --hud-safe-bottom's reserved band (hud.css's .hud-tele text, bottom
+     dock, same left side as this block); closing the rest of the gap
+     would push it into that reserved HUD text, which content.css's grid
+     rows exist specifically to prevent (P2.5 defect 2). Full centre
+     alignment isn't reachable without relitigating that budget. */
+  transform: translateY(10vh);
 }
 
 .inspection-block .console-list {
@@ -139,7 +152,8 @@ body[data-layout='split'] .landing-block {
   font-family: var(--font-body);
   font-size: 0.86rem;
   line-height: 1.5;
-  color: var(--ink-dim);
+  color: var(--ink-dim-blurb);
+  max-width: 42ch;
   margin-top: 4px;
 }
 
@@ -148,7 +162,8 @@ body[data-layout='split'] .landing-block {
   font-family: var(--font-hud);
   font-size: 12px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  /* v1.1-A #1: uppercase was mangling the @ glyph in the mailto address —
+     render it lowercase exactly as authored in data.js. */
   color: var(--warn);
   word-break: break-word;
 }

@@ -46,10 +46,32 @@ export function createPhaseReadout() {
 
   let lastText = '';
 
+  // v1.1-A #7: on mobile stack layout, a content-block docks in the same
+  // bottom band this readout sits in (content.css's 41vh/33vh budgets
+  // reach well past this element's `bottom: 14vh`). A phase beat's from/to
+  // window can straddle a content-block's own T-range (e.g. the
+  // descend-to-structure beat vs. the inspection block), so instead of
+  // hand-tuning each beat's window against every block's range, suppress
+  // the readout outright whenever a content-block is actually on screen
+  // and opaque on data-layout=stack — the two must never share vertical
+  // space there. `.style.display`/`.style.opacity` are read directly
+  // (content.js sets both inline, never via a CSS class) so this needs no
+  // getComputedStyle/layout read.
+  function contentBandOccupied() {
+    if (document.body.dataset.layout !== 'stack') return false;
+    const blocks = document.querySelectorAll('.content-block');
+    for (const block of blocks) {
+      if (block.style.display !== 'block') continue;
+      const opacity = block.style.opacity === '' ? 1 : Number(block.style.opacity);
+      if (opacity >= 0.9) return true;
+    }
+    return false;
+  }
+
   function update(state) {
     const { T, reducedMotion } = state;
     const beat = BEATS.find((b) => T >= b.from && T <= b.to);
-    if (!beat) {
+    if (!beat || contentBandOccupied()) {
       el.style.opacity = '0';
       return;
     }
