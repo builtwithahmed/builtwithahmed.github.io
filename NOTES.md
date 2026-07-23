@@ -3,6 +3,44 @@
 Log of what was tried and rejected, per MISSION_PLAN.md §0, so later phases
 don't repeat dead ends. Newest entries at the top.
 
+## 2026-07-23 — Flagged for next pass (live review after v1.1-B, not fixed yet)
+
+Three real issues from live-site review, deliberately not fixed in the same
+pass that flagged them — logging first so the next pass starts here instead
+of rediscovering them:
+
+1. **`scripts/gate.mjs`'s overlap check doesn't cover SVG leader lines**,
+   only the DOM rects listed in its `rects` array (`.content-block`,
+   `.callout-label.visible`, `.console-row.visible`) against drone
+   component points. It has no notion of the `.callout-line`/
+   `.project-callouts-svg` path geometry at all, so a leader line crossing
+   a heading (confirmed on the live site, mobile t=0.30, a line crosses
+   the "What I Work With" text) is structurally invisible to it — the same
+   category of "the gate can't see this" gap the 2026-07-21 anti-emptiness
+   entry describes for a different case. Needs either a point-sampled
+   check along each line's `d` attribute against content rects, or a
+   pixel-overlap read (`__debugSilhouetteOverlap`-style) restricted to the
+   SVG layer.
+2. **Mission-map waypoints are visible during the hero frame.** Live
+   review, not yet measured against any keyframe/T range — likely the
+   waypoint octahedrons (map.js) aren't gated to only fade in once the
+   mission-map act's own camera framing is active, unlike callouts (which
+   already window). Worth checking whether this is a `map.js` opacity/
+   visibility gap or just the hero camera's FOV/position happening to
+   catch waypoints placed along z -20..-36 that were never meant to be
+   hero-visible. Consider an act-scoped fade tied to T, mirroring how
+   dustRing/phase-readout are already gated to their own T windows rather
+   than always rendering.
+3. **Mobile landing camera shows only a sliver of Pad-B** at the T~0.97
+   framing — the v1.1-B pass made the pad itself more visible
+   (brighter ring, small emissive) but didn't touch the mobile camera
+   framing/FOV for the landing beat, so more of the pad is now legible
+   where it *is* on screen without changing how much of it fits in frame.
+   This is a `director.js` mobile keyframe (`mobileLook`) or FOV concern,
+   same category as the Amendment B mobile-framing work — likely needs the
+   same per-keyframe empirical tuning against `__debugNDC`, not a quick
+   CSS/material fix.
+
 ## 2026-07-23 — v1.1-B legibility pass: gate now permanent, caught and fixed 3 real pre-existing bugs
 
 Five areas (teardown legibility, Pad-B visibility, global brightness, text
