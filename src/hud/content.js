@@ -143,16 +143,42 @@ export function createContent() {
     setVisible(inspectionBlock, T >= SERVICES_START && T <= SERVICES_END);
     setVisible(landingBlock, T >= LANDING_START && T <= LANDING_END);
 
+    // v1.1-B #5: services used to reveal-and-never-hide, which is the
+    // pre-existing mobile overflow documented in NOTES.md (2026-07-22) —
+    // rows just kept accumulating for the rest of the act. Same
+    // previous/active/next windowing callouts.js/projectCallouts.js
+    // already use: <=3 simultaneously visible on desktop, <=2 on mobile.
+    // Rows never display:none-pop — .visible/.active (console.css) still
+    // drive the existing opacity/transform/max-height transition; only
+    // WHICH rows carry those classes changes.
+    const inServicesRange = T >= SERVICES_START && T <= SERVICES_END;
     const serviceBandWidth = (SERVICES_END - SERVICES_START) / serviceRows.length;
     const serviceBandIndex = Math.min(
       serviceRows.length - 1,
       Math.max(0, Math.floor((T - SERVICES_START) / serviceBandWidth))
     );
+    const isMobile = state.layout === 'stack';
+    const windowMin = isMobile ? serviceBandIndex : serviceBandIndex - 1;
+    const windowMax = serviceBandIndex + 1;
     serviceRows.forEach((row, i) => {
-      const visible = T >= SERVICES_START && T <= SERVICES_END && (reducedMotion ? true : T >= SERVICES_START + i * serviceBandWidth);
+      const revealed = inServicesRange && (reducedMotion ? true : T >= SERVICES_START + i * serviceBandWidth);
+      const inWindow = i >= windowMin && i <= windowMax;
+      const visible = revealed && inWindow;
       row.classList.toggle('visible', visible);
       row.classList.toggle('active', visible && i === serviceBandIndex);
     });
+
+    // v1.1-B #4: the widened L/R scrim (content.css, body.scrim-on) must
+    // only paint while a content-block is actually on screen — gating it
+    // on data-side alone would also darken pure camera-motion transition
+    // beats that share the same focus label but show no content.
+    const anyBlockVisible =
+      hero.style.display === 'block' ||
+      teardownBlock.style.display === 'block' ||
+      projectBlock.style.display === 'block' ||
+      inspectionBlock.style.display === 'block' ||
+      landingBlock.style.display === 'block';
+    document.body.classList.toggle('scrim-on', anyBlockVisible);
   }
 
   return { update, calloutStack, projectStack };

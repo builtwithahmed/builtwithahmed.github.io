@@ -3,6 +3,103 @@
 Log of what was tried and rejected, per MISSION_PLAN.md §0, so later phases
 don't repeat dead ends. Newest entries at the top.
 
+## 2026-07-23 — v1.1-B legibility pass: gate now permanent, caught and fixed 3 real pre-existing bugs
+
+Five areas (teardown legibility, Pad-B visibility, global brightness, text
+contrast/scrim, mobile row windowing) plus formalizing the overflow check
+NOTES.md flagged as "not fixed, out of scope" on 2026-07-22 into a real,
+committed `scripts/gate.mjs` (both viewports, 51 steps, run via `npm run
+gate`) instead of a scratch script re-derived every pass.
+
+**Emissive intensity alone can't fix "near-invisible" if the base emissive
+color is near-black.** First attempt at teardown legibility (#1) only raised
+`emissiveIntensity` on the exploded components' cloned materials
+(+0.3 at full explode, per spec). Visually this did almost nothing —
+`mats.dark`/`mats.body`'s own emissive colors (`0x0a1618`, `0x0f2226`) are so
+close to black that even a higher multiplier on them stays close to black.
+Fixed by ALSO lerping the emissive *color* toward a lit rim-tone
+(`0x4f757c`, matching environment.js's fresnel rim color) as k ramps, not
+just the intensity scalar — confirmed visually (t=0.24 desktop screenshot)
+before/after, not just by the number changing. If a future "make X more
+visible via emissive" request doesn't move the needle, check the base
+emissive color before reaching for a bigger multiplier.
+
+**Pad-B's brighter ring (#2) reintroduced the P2.6 hero-stain bug even
+without emissive.** Re-tested against the exact P2.7 Stage 1 methodology
+(behind-headline vs. side-region luminance, composer on) after adding a
+small ring-only emissive — regression (~2.8x ratio, same magnitude as the
+original bug). Removed the emissive, kept only the brighter base color —
+ratio dropped but a direct screenshot still showed a visible soft teal oval
+behind the headline; a composer-on/off comparison showed *zero* bloom
+contribution to that ratio, proving it wasn't bloom at all. Reverted the
+hero pad's ring/H color too, back to its exact pre-v1.1-B material — and
+the oval was STILL faintly there. Isolated via `git stash` against the true
+pre-v1.1-B build: baseline ratio 1.71 (never zero) — the residual glow is
+the *existing, permanent, unrelated* vignette (post.js), which brightens
+screen-center over screen-edges regardless of the pad. **Lesson: a plain
+luminance-ratio check between two regions can't tell "bloom stain" from
+"the vignette naturally brightens the middle" apart — always cross-check
+composer-on vs. composer-off on the same rects (zero bloom contribution =
+not a bloom stain) AND look at an actual screenshot, not just the number.**
+End state: hero pad completely unchanged from pre-v1.1-B; only Pad-B (the
+landing pad, a separate material instance) got the brighter color + ring
+emissive — `createHelipad`'s new `brightPad` param defaults on, hero's call
+site passes `false`.
+
+**The new permanent gate (overlap + anti-emptiness + overflow, both
+viewports) caught 3 real bugs immediately, none of them things v1.1-B's
+own changes were about:**
+1. **Hero overflows its own 32vh budget on desktop, ~305px vs 288px,
+   present at every T 0.00-0.10.** Pre-existing since v1.1-A's 42ch line
+   cap (2026-07-22) — that pass's own ad-hoc overflow check only ran
+   *mobile*, so this shipped to production undetected. Root cause: 42ch
+   wrapped the hero sub to a 4th line the budget can't afford. Fixed with a
+   hero-specific `max-width: 58ch` (fits the same copy in 3 lines, like
+   before 42ch existed) plus trimming the hero-only eyebrow/h1/.ctas
+   margins and the block's own padding — none of it touches the
+   services/landing subs 42ch was actually written for.
+2. **`.project-block`'s mobile height override had zero effect** — the
+   exact CSS-specificity trap this file already documents twice (the
+   landing-block fix, 2026-07-21): `body[data-layout='stack']
+   .project-block` (2 attr/class parts) loses to content.css's own
+   `body[data-layout='stack'][data-side='R'] .content-block` (3 parts)
+   regardless of source order. Selector had to match that exact shape.
+   **Third time this trap has bitten a per-block override in this repo —
+   worth grepping for `body[data-layout=` before adding any future one.**
+3. **Teardown content (starts T=0.13, content.js) laid out under the
+   *centered* 32vh budget instead of the L/R dock's much larger one for
+   T 0.13-0.15**, because director.js's C->L focus flip happens at a
+   keyframe segment's interpolation *midpoint* (T=0.15 for the
+   [0.10,0.20] segment) — a timing gap the exact same shape as the one the
+   2026-07-19 "Focus label timing" fix and the P2.6 fix already in this
+   file both patched, just never checked against content.js's own T
+   thresholds until this gate ran on desktop too. Fixed the same way as
+   precedent: relabeled the t=0.10 keyframe C->L (numerics untouched) so
+   the flip isn't needed inside this segment at all, rather than nudging
+   the midpoint later again.
+Also found: `body[data-layout='split'][data-side='C'] .hero-block`
+overrides written *before* the generic C-rule of equal specificity
+silently lost the cascade tie to it (whichever equal-specificity rule is
+declared *last* wins) — moved below the generic rule to actually apply.
+
+**6 minor overflow failures remain (mobile only, teardown-block and
+inspection-block, 3-11px over a 346px budget) — not chased further.**
+Same "diminishing returns once the real fix lands" call as Table D's
+2026-07-19 precedent. Windowing (below) took inspection-block from up to
+704px to 351px; the residual 5px is what's left of the h2 size bump
+(v1.1-A) on an otherwise-fitting block.
+
+**Mobile row windowing (#5):** services (content.js) had no windowing at
+all — rows revealed and simply stayed visible for the rest of the act,
+which was the actual root cause of the overflow flagged (not fixed) on
+2026-07-22. Gave it the exact previous/active/next window
+callouts.js/projectCallouts.js already use (`windowMin`/`windowMax` off
+`bandIndex`, 2 visible mobile / 3 desktop) — same `.visible`/`.active`
+CSS classes already drive the existing opacity/transform/max-height
+transition, so no new instant pops. Project rows were already windowed
+this way pre-v1.1-B; their overflow was `.project-block`'s CSS-specificity
+bug (above), not a windowing gap.
+
 ## 2026-07-22 — v1.1-A typography/placement pass: gate clean, one pre-existing overflow surfaced (not fixed, out of scope)
 
 Nine targeted fixes (email uppercase/@ collision, h2 scale+tracking+margin,

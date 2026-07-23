@@ -57,7 +57,9 @@ const fragmentShader = /* glsl */ `
     // 1 right in front of the camera, fading to 0 by uFarDepth — a
     // depth band, not a radius, so it can't project as an ellipse.
     float proximity = 1.0 - smoothstep(uNearDepth, uFarDepth, vViewDepth);
-    vec3 color = uGridColor * (1.8 + proximity * 1.6);
+    // v1.1-B #3: grid line brightness +30% near/mid field, part of the
+    // global "raise the world one stop" pass (1.8*1.3, 1.6*1.3).
+    vec3 color = uGridColor * (2.34 + proximity * 2.08);
     float alpha = line * (0.62 + proximity * 0.3);
     gl_FragColor = vec4(color, alpha);
     #include <fog_fragment>

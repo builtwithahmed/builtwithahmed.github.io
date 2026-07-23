@@ -22,7 +22,24 @@ import {
   DoubleSide,
 } from 'three';
 
-export function createHelipad(x = 0, z = 0) {
+// v1.1-B #2: live feedback — Pad-B (the landing pad) reads as a faint
+// ellipse at T~0.97. `brightPad` defaults on, but main.js's hero pad (at
+// the world origin, right behind the hero headline at t=0) passes `false`.
+// Tried two narrower fixes first, both re-tested against the exact P2.7
+// Stage 1 regression check (behind-headline vs. side-region luminance,
+// composer on) and a direct screenshot, since the luminance ratio alone
+// turned out not to be conclusive on its own (see below): (1) emissive on
+// the ring only — reintroduced the ~2x-magnitude stain ratio outright; (2)
+// emissive off, base color brightened only — luminance ratio and a
+// composer-on/off comparison both looked clean (bloom contributed exactly
+// 0 to the ratio), but the actual screenshot still showed a visible soft
+// teal oval behind the headline. The ring is a literal ring shape; a
+// brighter non-emissive ring reads as a glow at this distance/angle
+// regardless of bloom being involved at all. Root cause is the ring
+// geometry itself this close to the hero camera, not emissive/bloom — so
+// the hero pad keeps its exact original (pre-v1.1-B) material for both
+// marks and ring, and only Pad-B gets brighter.
+export function createHelipad(x = 0, z = 0, { brightPad = true } = {}) {
   const group = new Group();
 
   const base = new Mesh(
@@ -38,13 +55,16 @@ export function createHelipad(x = 0, z = 0) {
   // marking, not a light source; it should read via the key/rim lights
   // like the rest of the pad, not glow on its own. No `emissive` at all,
   // so it can never catch bloom regardless of tuning elsewhere.
-  const markMat = new MeshStandardMaterial({
-    color: 0x1c4650,
-    roughness: 0.35,
-    metalness: 0.5,
-  });
+  const markMat = new MeshStandardMaterial(
+    brightPad ? { color: 0x2e6672, roughness: 0.35, metalness: 0.5 } : { color: 0x1c4650, roughness: 0.35, metalness: 0.5 }
+  );
+  const ringMat = new MeshStandardMaterial(
+    brightPad
+      ? { color: 0x2e6672, roughness: 0.35, metalness: 0.5, emissive: 0x1c4650, emissiveIntensity: 0.18 }
+      : { color: 0x1c4650, roughness: 0.35, metalness: 0.5 }
+  );
 
-  const ring = new Mesh(new RingGeometry(1.48, 1.64, 40), markMat);
+  const ring = new Mesh(new RingGeometry(1.48, 1.64, 40), ringMat);
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.012;
   group.add(ring);
@@ -109,7 +129,9 @@ function createFresnelMaterial() {
         uBaseColor: { value: new Color(0x050a0c) },
         // desaturated cyan-grey, low intensity per instruction — this is
         // an edge cue, not another emissive glow source for bloom to grab.
-        uRimColor: { value: new Color(0x3d5a5f) },
+        // v1.1-B #3: rim intensity +30% (0x3d5a5f * 1.3) as part of the
+        // global "raise the world one stop" pass.
+        uRimColor: { value: new Color(0x4f757c) },
         uRimPower: { value: 2.2 },
       },
     ]),

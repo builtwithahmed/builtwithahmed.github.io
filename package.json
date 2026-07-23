@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "verify": "node scripts/verify.mjs",
-    "shots": "node scripts/shots.mjs"
+    "shots": "node scripts/shots.mjs",
+    "gate": "node scripts/gate.mjs"
   },
   "dependencies": {
     "gsap": "^3.15.0",

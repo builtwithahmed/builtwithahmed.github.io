@@ -14,8 +14,22 @@
   margin-top: 18px;
 }
 
-body[data-layout='stack'] .project-block {
+/* v1.1-B gate: even with proper prev/active/next windowing (2 visible max
+   on mobile — projectCallouts.js already did this pre-v1.1-B), the header
+   (bigger since v1.1-A's heading bump) plus 2 real rows (one active, with
+   its tags row) measures ~505px against the generic 41vh (346px) budget —
+   same precedent as the landing-block override below: the label/dock is
+   correct, the content is just legitimately taller than the generic
+   budget for this specific block. Sized to what the content actually
+   needs, same technique as landing's 62vh.
+   Selector must match content.css's own stack-rule shape
+   (body[data-layout][data-side] .content-block — three attr/class parts)
+   or it silently loses the cascade regardless of source order — the
+   exact specificity trap NOTES.md already documents for the landing-block
+   override below; project act is focus:'R' (director.js), so [data-side='R']. */
+body[data-layout='stack'][data-side='R'] .project-block {
   max-width: 58vw;
+  max-height: 60vh;
   justify-self: start;
   align-self: end;
 }

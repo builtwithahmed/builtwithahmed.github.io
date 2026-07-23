@@ -15,6 +15,12 @@
      --ink-dim, is left untouched. */
   --ink-dim-blurb: #8a9a9a;
 
+  /* v1.1-B #4: "the type itself is now correct; the backing isn't" —
+     headings get one step brighter than body --ink. Scoped to headings
+     only (content.css's h1/h2 rule); everything else that reads --ink
+     (buttons, HUD) is untouched. */
+  --ink-heading: #e2eaea;
+
   /* v1.1-A #9: the single canonical left inset — #content-stage's own
      padding — that HUD corner brackets and left-docked content now both
      align to exactly, instead of each carrying its own slightly

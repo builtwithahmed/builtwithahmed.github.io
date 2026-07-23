@@ -7,6 +7,7 @@ import {
   Group,
   Mesh,
   Vector3,
+  Color,
   BoxGeometry,
   CylinderGeometry,
   SphereGeometry,
@@ -15,6 +16,35 @@ import {
   MeshBasicMaterial,
   DoubleSide,
 } from 'three';
+
+// v1.1-B #1: live feedback was "the drone splits" reads as breakage, not a
+// schematic — exploded components were near-invisible dark fragments.
+// Radial offsets pulled in ~15% so the exploded cluster still reads as one
+// machine coming apart rather than scattered debris.
+const EXPLODE_RADIAL_SCALE = 0.85;
+// How much emissiveIntensity ramps in above each material's own baseline as
+// k goes from 0.2 (explode just starting to read as "apart") to 1 (fully
+// exploded) — applied per-component via cloned materials (below), not the
+// shared mats.dark/mats.body instances, so this can't also brighten the
+// static body/undercarriage, which never explodes.
+const EXPLODE_EMISSIVE_RAMP = 0.3;
+const EXPLODE_EMISSIVE_START = 0.2;
+// mats.dark/mats.body's own emissive colors (0x0a1618, 0x0f2226) are close
+// enough to black that even a +0.3 intensity ramp on them alone barely
+// registered on screen — an emissiveIntensity multiplier can't make a
+// near-zero color visible. "Toward a lit state" needs the color to move,
+// not just its multiplier: blend toward this rim-tone cyan-grey (matches
+// environment.js's fresnel rim color, so exploded parts read as catching
+// the same kind of edge light the rest of the scene already uses) as k
+// ramps, capped well short of a full swap so components still read as
+// their own material, not a uniform glow.
+const EXPLODE_LIT_COLOR = new Color(0x4f757c);
+const EXPLODE_LIT_COLOR_BLEND = 0.6;
+// Extra boost + amber blend for whichever component is the active callout's
+// target, so the part-to-label connection is unmissable independent of the
+// leader line/dot (callouts.js/callouts.css already highlight those).
+const ACTIVE_EMISSIVE_BOOST = 0.35;
+const ACTIVE_COLOR = new Color(0xffb03a);
 
 function createMaterials() {
   return {
@@ -67,15 +97,41 @@ export function createDrone() {
   function registerComponent(name, object3D, assembledPos, explodeDir, explodeDist, explodeRot = [0, 0, 0]) {
     object3D.position.set(...assembledPos);
     drone.add(object3D);
+    const scaledDist = explodeDist * EXPLODE_RADIAL_SCALE;
+
+    // Give this component its OWN clones of the shared dark/body materials
+    // (mats.dark/mats.body are reused across many meshes, including the
+    // never-exploding core body and undercarriage) so its emissive can be
+    // driven independently by explode(k, activeKey) below without also
+    // brightening parts that aren't exploding.
+    const dimMaterials = [];
+    const baseEmissiveIntensity = [];
+    const baseEmissiveColor = [];
+    const cloneMap = new Map();
+    object3D.traverse((child) => {
+      if (!child.isMesh) return;
+      if (child.material !== mats.dark && child.material !== mats.body) return;
+      if (!cloneMap.has(child.material)) cloneMap.set(child.material, child.material.clone());
+      child.material = cloneMap.get(child.material);
+    });
+    for (const clone of cloneMap.values()) {
+      dimMaterials.push(clone);
+      baseEmissiveIntensity.push(clone.emissiveIntensity);
+      baseEmissiveColor.push(clone.emissive.clone());
+    }
+
     components[name] = {
       object: object3D,
       assembled: assembledPos,
       exploded: [
-        assembledPos[0] + explodeDir[0] * explodeDist,
-        assembledPos[1] + explodeDir[1] * explodeDist,
-        assembledPos[2] + explodeDir[2] * explodeDist,
+        assembledPos[0] + explodeDir[0] * scaledDist,
+        assembledPos[1] + explodeDir[1] * scaledDist,
+        assembledPos[2] + explodeDir[2] * scaledDist,
       ],
       rot: explodeRot,
+      dimMaterials,
+      baseEmissiveIntensity,
+      baseEmissiveColor,
     };
   }
 
@@ -177,8 +233,12 @@ export function createDrone() {
 
   // radialScale (Amendment B) shrinks how far components fly out on narrow
   // viewports — applied to the offset only, k still drives the 0..1 ramp.
-  function explode(k, radialScale = 1) {
+  // activeKey (v1.1-B #1) is whichever component's callout is currently
+  // active (main.js), so that one part gets a stronger amber-tinted
+  // highlight on top of the general "every floating part is lit" ramp.
+  function explode(k, radialScale = 1, activeKey = null) {
     k = Math.min(1, Math.max(0, k));
+    const ramp = k > EXPLODE_EMISSIVE_START ? ((k - EXPLODE_EMISSIVE_START) / (1 - EXPLODE_EMISSIVE_START)) * EXPLODE_EMISSIVE_RAMP : 0;
     for (const name in components) {
       const c = components[name];
       c.object.position.set(
@@ -187,6 +247,18 @@ export function createDrone() {
         c.assembled[2] + (c.exploded[2] - c.assembled[2]) * k * radialScale
       );
       c.object.rotation.set(c.rot[0] * k, c.rot[1] * k, c.rot[2] * k);
+
+      const isActive = activeKey === name;
+      // 0..1 progress through the emissive ramp itself (not raw k), so the
+      // color blend and the intensity boost reach their target together.
+      const litBlend = (ramp / EXPLODE_EMISSIVE_RAMP) * EXPLODE_LIT_COLOR_BLEND;
+      c.dimMaterials.forEach((mat, i) => {
+        mat.emissiveIntensity = c.baseEmissiveIntensity[i] + ramp + (isActive ? ACTIVE_EMISSIVE_BOOST : 0);
+        mat.emissive.copy(c.baseEmissiveColor[i]).lerp(EXPLODE_LIT_COLOR, litBlend);
+        if (isActive) {
+          mat.emissive.lerp(ACTIVE_COLOR, 0.55);
+        }
+      });
     }
   }
   explode(0);

@@ -43,7 +43,8 @@ export function createWorld(canvas) {
   // UnrealBloomPass (post.js) requires tone mapping enabled to look right —
   // untonemapped bloom clips to flat white instead of a soft glow.
   renderer.toneMapping = ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  // v1.1-B #3: "raise the world, globally, one stop."
+  renderer.toneMappingExposure = 1.25;
 
   const scene = new Scene();
   scene.background = new Color(0x05080a);

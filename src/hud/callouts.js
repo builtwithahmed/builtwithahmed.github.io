@@ -32,7 +32,9 @@ export function createCallouts({ camera, drone, mountEl }) {
     // every visible callout, independent of the label end of the line.
     const dot = document.createElementNS(SVG_NS, 'circle');
     dot.classList.add('callout-dot');
-    dot.setAttribute('r', '3');
+    // v1.1-B #1: "the part-to-label connection is unmissable" — 3px read as
+    // too fine against the brighter exploded components.
+    dot.setAttribute('r', '4');
     svg.appendChild(dot);
 
     const label = document.createElement('div');
@@ -104,7 +106,9 @@ export function createCallouts({ camera, drone, mountEl }) {
 
       item.path.setAttribute('d', `M ${sx} ${sy} L ${elbowX} ${sy} L ${elbowX} ${anchorY} L ${anchorX} ${anchorY}`);
       item.path.classList.toggle('active', active);
-      item.path.style.opacity = active ? '1' : '0.45';
+      // v1.1-B #1: doubled from 0.45 — teardown must read as a schematic,
+      // not have its dim (non-active) leader lines nearly invisible.
+      item.path.style.opacity = active ? '1' : '0.9';
     });
   }
 

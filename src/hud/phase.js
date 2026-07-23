@@ -33,6 +33,18 @@ const FADE = 0.015; // T-fraction fade in/out at each beat's edges
 // is not the boundary being protected, `to - FADE` is.
 const BEATS = [
   { from: 0.08, to: 0.145, text: 'ASCENDING · 40 M' }, // shortened takeoff beat; padded past TEARDOWN_START (0.13)
+  // v1.1-B #1: unlike the other beats (which fill otherwise-empty T spans),
+  // this one runs concurrently with the teardown content/callouts — live
+  // feedback was that the exploded drone "reads as breakage" without being
+  // told what it is. `from` starts right where the ASCENDING beat's own
+  // `to` ends (BEATS.find takes the first match, so overlapping ranges
+  // would silently starve this one); `to` pads past the explode-hold end
+  // (0.34) by the usual FADE margin. Desktop only in practice — mobile
+  // stack suppresses any phase-readout while a content-block is on screen
+  // (see contentBandOccupied below), and the teardown content-block is
+  // visible for this entire span, which is the correct call: mobile
+  // already has "Systems check / What I Work With" doing the same job.
+  { from: 0.145, to: 0.355, text: 'SYSTEMS TEARDOWN · COMPONENT INSPECTION' },
   { from: 0.38, to: 0.455, text: 'ENROUTE TO WAYPOINT ONE' }, // reassemble + climb transition; padded past PROJECTS_START (0.44)
   { from: 0.7, to: 0.76, text: 'APPROACHING STRUCTURE' }, // descend-to-structure transition
   { from: 0.86, to: 0.915, text: 'RTL · PAD-B' }, // bridges the services-end / landing-start gap

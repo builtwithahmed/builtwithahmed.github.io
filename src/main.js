@@ -24,7 +24,9 @@ const sky = createSky();
 scene.add(sky);
 const terrain = createTerrain();
 scene.add(terrain);
-const helipad = createHelipad(0, 0);
+// v1.1-B #2: hero pad keeps its exact original material — see the note in
+// createHelipad, this is the pad right behind the hero headline at t=0.
+const helipad = createHelipad(0, 0, { brightPad: false });
 scene.add(helipad);
 // Off-axis (matches the inspection tower's x=-4.2 pattern) so the drone
 // has an actual right-of-centre world position to land at t=1.00, rather
@@ -67,6 +69,22 @@ const callouts = createCallouts({ camera, drone, mountEl: content.calloutStack }
 const projectCallouts = createProjectCallouts({ camera, waypoints: map.waypoints, mountEl: content.projectStack });
 const phase = createPhaseReadout();
 
+// v1.1-B #1: which skill's component is the "active" (amber) callout right
+// now, so drone.explode() can give that one part a stronger highlight.
+// Mirrors callouts.js's own BAND_START/BAND_END/bandIndex math exactly —
+// duplicated rather than imported because callouts.js computes it as a
+// side effect of a per-frame DOM/SVG pass that must run after the drone's
+// world matrices are updated (see the "Matrices must be fresh" note below),
+// while this needs to run before drone.explode().
+const TEARDOWN_BAND_START = 0.13;
+const TEARDOWN_BAND_END = 0.34;
+function activeComponentKey(T) {
+  if (T < TEARDOWN_BAND_START || T > TEARDOWN_BAND_END) return null;
+  const bandWidth = (TEARDOWN_BAND_END - TEARDOWN_BAND_START) / skills.length;
+  const idx = Math.min(skills.length - 1, Math.max(0, Math.floor((T - TEARDOWN_BAND_START) / bandWidth)));
+  return skills[idx].componentKey;
+}
+
 const timer = new Timer();
 const camPos = new Vector3(...director.state.cam);
 const camLook = new Vector3(...director.state.look);
@@ -82,7 +100,7 @@ function tick() {
   const state = director.update(dt);
   const flying = state.T < 0.985;
 
-  drone.explode(state.explode, state.explodeScale);
+  drone.explode(state.explode, state.explodeScale, activeComponentKey(state.T));
   drone.update(dt, state.dronePos, { time, reducedMotion: state.reducedMotion, flying });
   dustRing.update(state.T, state.reducedMotion);
   map.update(state.T, time, state.reducedMotion);

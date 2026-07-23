@@ -43,7 +43,8 @@
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.06;
-  color: var(--ink);
+  /* v1.1-B #4: one step brighter than body --ink, headings only. */
+  color: var(--ink-heading);
   text-shadow: 0 4px 40px rgba(0, 0, 0, 0.8);
 }
 /* Hero must fit the bottom-third budget (§4) without scrolling — the
@@ -71,13 +72,37 @@
   max-width: 42ch;
   text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
 }
-.hero-block .sub { font-size: clamp(0.82rem, 0.95vw, 0.95rem); line-height: 1.5; }
+/* v1.1-B gate: the general 42ch cap (.content-block .sub, above) wrapped
+   the hero sub to a 4th line, overflowing the hero's own hard "fit 32vh
+   without scrolling" budget (comment further up) by ~17px on desktop —
+   caught by the new permanent overflow check (scripts/gate.mjs), which
+   checks desktop too where the old ad-hoc v1.1-A check only ran mobile.
+   42ch's cited evidence (v1.1-A) was the services/landing sub lines, not
+   hero's own already-narrower, already-tuned-to-fit copy — exempt it
+   rather than force a line the hero budget can't afford. */
+.hero-block .sub { font-size: clamp(0.82rem, 0.95vw, 0.95rem); line-height: 1.5; max-width: 58ch; }
+/* v1.1-B gate: the 58ch fix above wasn't sufficient alone — measured
+   (scripts/_check-hero-overflow.mjs) at 305px against the hero's 288px
+   (32vh @ 900px) budget even after it, because h1 (2 lines, already near
+   its own clamp max) + the eyebrow/ctas margins + the block's own
+   padding add up regardless of the sub's own height. Trimmed the margins
+   that are safely hero-only (h1/.ctas only ever render inside hero-block;
+   .eyebrow is shared with every other block's header, so scoped here
+   specifically rather than trimmed on the shared rule). */
+.hero-block .eyebrow { margin-bottom: 2px; }
+.hero-block h1 { margin-bottom: 2px; }
 .content-block .ctas {
   margin-top: 16px;
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
 }
+/* `.hero-block .ctas` and `.content-block .ctas` are equal specificity
+   (class+class) — this override must stay AFTER the generic rule above or
+   the tie resolves to whichever comes later in the file and silently wins
+   back, regardless of which one looks more "specific" to hero. Same for
+   the padding override below vs. the generic C-rule further down. */
+.hero-block .ctas { margin-top: 4px; }
 .btn-primary,
 .btn-ghost {
   font-family: var(--font-hud);
@@ -113,12 +138,19 @@ body[data-layout='split'] .content-block {
      windowing), never a nested scroll. hidden is a clip-only safety net. */
   overflow: hidden;
 }
+/* v1.1-B #4: the L/R scrim used to be `.content-block`'s own background,
+   which meant it could never be wider than the text column itself — the
+   block's own `overflow: hidden` (directly above) would clip anything
+   wider. Moved to #content-stage (full viewport width, no overflow clip)
+   so it can extend 8vw past the column, gated by `body.scrim-on`
+   (content.js toggles this — true only while a content-block is actually
+   on screen) so it never darkens the 3D scene during a pure camera-motion
+   transition beat that happens to still be L/R-focused. */
 body[data-layout='split'][data-side='L'] .content-block {
   grid-column: 2 / 3;
   justify-self: end;
   max-width: 46vw;
   text-align: left;
-  background: linear-gradient(to left, rgba(5, 8, 10, 0.82), transparent 60%);
   padding: 4vh 3vw;
 }
 body[data-layout='split'][data-side='R'] .content-block {
@@ -126,11 +158,28 @@ body[data-layout='split'][data-side='R'] .content-block {
   justify-self: start;
   max-width: 46vw;
   text-align: left;
-  background: linear-gradient(to right, rgba(5, 8, 10, 0.82), transparent 60%);
   /* v1.1-A #9: left edge is content-stage's own --content-inset alone —
      no extra padding stacked on top of it, so eyebrow/heading/rows land
      flush with the HUD corner bracket's inset. */
   padding: 4vh 3vw 4vh 0;
+}
+body.scrim-on[data-layout='split'][data-side='L'] #content-stage {
+  /* Text column (46vw) + 8vw = 54vw total scrim span; plateau at 0.88
+     opacity for the first 80%, feather to transparent over the last 20%. */
+  background: linear-gradient(
+    to left,
+    rgba(5, 8, 10, 0.88) 0,
+    rgba(5, 8, 10, 0.88) 43.2vw,
+    transparent 54vw
+  );
+}
+body.scrim-on[data-layout='split'][data-side='R'] #content-stage {
+  background: linear-gradient(
+    to right,
+    rgba(5, 8, 10, 0.88) 0,
+    rgba(5, 8, 10, 0.88) 43.2vw,
+    transparent 54vw
+  );
 }
 body[data-layout='split'][data-side='C'] .content-block {
   grid-column: 1 / -1;
@@ -139,11 +188,20 @@ body[data-layout='split'][data-side='C'] .content-block {
   max-height: 32vh;
   max-width: 720px;
   text-align: center;
-  background: linear-gradient(to top, rgba(5, 8, 10, 0.85), transparent 60%);
+  /* v1.1-B #4: bottom-third blocks stay on the block's own background
+     (bottom-up, not wider than the column) — bumped to the same 0.88 peak. */
+  background: linear-gradient(to top, rgba(5, 8, 10, 0.88), transparent 60%);
   padding: 2vh 24px 3vh;
   overflow: hidden; /* clip-only safety net — never a visible scrollbar (P2.6) */
 }
 body[data-layout='split'][data-side='C'] .content-block .ctas { justify-content: center; }
+/* v1.1-B gate: hero (the only real content ever shown under the C rule)
+   measured over its 32vh budget even after the .sub/.eyebrow/h1/.ctas
+   trims above — this padding override is the last lever, and per the
+   note by the .ctas override above, it must come after this generic
+   C-rule (equal specificity: type+2attr+1class either way) to actually
+   win instead of silently losing back to it. */
+body[data-layout='split'][data-side='C'] .hero-block { padding: 1.5vh 24px 2.5vh; }
 
 /* ---------------- Mobile stack (<760px) ---------------- */
 body[data-layout='stack'] #content-stage {
@@ -163,7 +221,10 @@ body[data-layout='stack'][data-side='R'] .content-block {
   max-height: 41vh;
   width: 100%;
   text-align: left;
-  background: linear-gradient(to top, rgba(5, 8, 10, 0.85), transparent 60%);
+  /* v1.1-B #4: 0.88 peak (up from 0.85) — mobile blocks are already
+     near-full-width, so no widening needed here, unlike the desktop
+     L/R stage-level scrim above. */
+  background: linear-gradient(to top, rgba(5, 8, 10, 0.88), transparent 60%);
   /* v1.1-A #9: same --content-inset-only left edge as the desktop dock. */
   padding: 3vh 20px 4vh 0;
   overflow: hidden; /* clip-only safety net — never a visible scrollbar (P2.6) */
@@ -176,7 +237,7 @@ body[data-layout='stack'][data-side='C'] .content-block {
   max-height: 33vh; /* bottom third */
   width: 100%;
   text-align: center;
-  background: linear-gradient(to top, rgba(5, 8, 10, 0.85), transparent 60%);
+  background: linear-gradient(to top, rgba(5, 8, 10, 0.88), transparent 60%);
   padding: 2vh 20px 3vh;
   overflow: hidden; /* clip-only safety net — never a visible scrollbar (P2.6) */
 }

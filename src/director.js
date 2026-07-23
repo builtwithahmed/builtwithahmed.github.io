@@ -17,7 +17,20 @@ const KEYFRAMES = [
   // bottom-third band (Table G); tilting the look down pushes the drone
   // higher in frame without touching horizontal framing/width%.
   { t: 0.00, cam: [0, 1.85, 4.3], look: [0, 0.85, 0], drone: [0, 1.6, 0], focus: 'C' }, // PREFLIGHT
-  { t: 0.10, cam: [4.5, 2.4, 4.5], look: [0, 1.9, -3], drone: [0.3, 2.2, -3], focus: 'C' }, // TAKEOFF
+  // v1.1-B gate: relabeled C->L (numerics untouched, same precedent as the
+  // P2.6 fix documented below) — content.js's TEARDOWN_START (0.13) is
+  // *before* this segment's own midpoint (0.15, see below), so for T
+  // 0.13-0.15 the teardown block was laid out under the C rule's 32vh
+  // budget instead of the L/R dock's much larger one, overflowing it by
+  // ~50px (caught by the new permanent scripts/gate.mjs, which checks
+  // desktop too — the same category of bug the P2.6 fix below was
+  // guarding against, just for content HEIGHT budget rather than drone
+  // overlap). Labeling this keyframe 'L' from the start removes the flip
+  // from this segment entirely rather than just moving it earlier, and is
+  // strictly safer for the overlap concern the P2.6 fix cared about too —
+  // no content shows before T=0.13 regardless, and explode k is still ~0.1
+  // at T=0.14 (barely separated).
+  { t: 0.10, cam: [4.5, 2.4, 4.5], look: [0, 1.9, -3], drone: [0.3, 2.2, -3], focus: 'L' }, // TAKEOFF
   // Holds a neutral (unshifted) look-at right up to the L transition — same
   // fix as the t=0.70 keyframe below, mirrored: without it, interpolation
   // toward idx @0.22's L offset drifts the drone off-center while still
