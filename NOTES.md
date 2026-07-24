@@ -3,6 +3,204 @@
 Log of what was tried and rejected, per MISSION_PLAN.md §0, so later phases
 don't repeat dead ends. Newest entries at the top.
 
+## 2026-07-24 — v1.2.1 determinism: seeded RNG, latch bugs, capture-freeze scope, AA floor
+
+**Unseeded-RNG skyline trap.** environment.js's createHorizon() called
+Math.random() directly for building placement/height — invisible in a
+single session, but two fresh sessions at the identical scroll position
+never rendered the same skyline. Math.random() can't be seeded, so this
+wasn't a tunable parameter, it was a hard trap: any code path that feeds
+persistent scene layout (as opposed to one-shot per-frame jitter) needs
+its own seedable PRNG instance, not the global one. Grepped for every
+other Math.random() call site before touching any of them — the rest
+are all per-frame jitter that doesn't feed layout, so left untouched.
+Fixed with a local mulberry32(HORIZON_SEED) instance inside
+createHorizon() itself, scoped to that function only.
+
+**HORIZON_SEED=2.** Seed choice was deliberately not mine to make — Ahmed
+picks the skyline he composes best with. Rendered t=0.00 and t=0.24
+desktop stills for 3 candidate seeds, held for his pick: seed 2. Marked
+provisional in code (not "immutable") pending the full Step 6 capture
+set — if any of the five desktop / two mobile frames it ships in
+composes badly, it gets re-picked, not defended.
+
+**Latch-vs-convergence: two instances, same shape.** Both were found by
+demanding the byte-identity proof rather than trusting "looks the same":
+drone.js's yaw only updates `if (speed > 0.15)` — below that threshold
+rotation just stops being touched and holds whatever value it last had.
+tower.js's frozen branch set scanRing.position.y but never
+scanMat.opacity, so opacity held whatever the brief unfrozen startup
+window left it at. Neither is a convergence problem (more wait time
+doesn't fix either) and neither showed up as a numeric mismatch in
+casual state inspection — both only surfaced by diffing __debugNDC()/
+material state field-by-field between two sessions after every other
+known source of drift was already eliminated. Fixed by forcing both to a
+fixed resting value under captureFreeze instead of trusting whatever
+session history left them at. Worth naming as a pattern: any state that
+updates conditionally (`if (x > threshold)`) rather than every frame is a
+latch-bug candidate, not just these two.
+
+**Capture-freeze scope: the CSS grep undersold it.** The brief's own
+starting hypothesis (STOP 1 amendment 3c) was CSS animation:/transition:
+declarations — and grepping for those found real bugs (hud-blink,
+decode-caret-blink, every one-shot transition). But fixing all of them
+and re-running the proof still left ~8,757px of diff. The actual bulk of
+the nondeterminism was JS-driven and invisible to that grep: rotor spin
+(an unbounded rotation accumulator, easily the largest single
+contributor), drone hover bob, tower scan/beacon/defect glow, and the
+mission-map's waypoint-0 pulse (active even before T reaches the
+mission-map act — a scoping bug independent of this task, caught as a
+side effect). Lesson for next time a capture/gate script needs
+determinism: grep the stylesheets, but don't stop there — anything
+reading `time`/`performance.now()`/an rAF-accumulated value in a
+per-frame update() is a candidate regardless of which layer it's in.
+
+**~0.022% residual: SwiftShader AA floor, verified not assumed.** After
+every fix above, two fresh sessions at t=0.24/1440x900 still differed by
+282 of 1,296,000 px (0.022%), y=385-387 only. Numeric diff confirmed
+every piece of inspectable state (drone position/rotation, all 6
+component NDC positions, tower/horizon/map children) bit-identical
+between sessions — the pixels differ with nothing upstream differing.
+First pass wrongly called this "horizon silhouette antialiasing" off an
+eyeballed crop, without proof. Correct method: captured a third session
+with `__debugLayers.drone.visible = false` at the same settled state and
+diffed actual pixel colors at the 282 coordinates against that render —
+274/282 changed when the drone was hidden (confirmed drone body/rotor-
+line edge, not horizon), the remaining 8 sit immediately adjacent and are
+almost certainly the same AA gradient just under the match threshold. 0
+of 282 fall inside any text or HUD rect (checked against precise
+getBoundingClientRect() data). Same page re-screenshotted 3x:
+byte-identical (rules out frame jitter). Same process, fresh page: still
+differs (rules out process-level variance). Forced non-Vulkan SwiftShader
+ANGLE backend: same ~0.02% magnitude (rules out that specific backend
+flag as a fix). WEBGL_debug_renderer_info confirms SwiftShader/Subzero
+(its JIT shader compiler) as the actual GL backend — a plausible source
+of tiny floating-point shader-evaluation differences across separate
+context/compilation instances, and outside application control. Treated
+as the accepted determinism floor, not chased further.
+
+## 2026-07-23 — v1.2 motion & text system: splines, decode.js, font A/B
+
+**A. Continuous flight.** director.js's per-segment `smoothstep(uRaw)` before
+every `lerp3` had zero derivative at both ends of its own [0,1] domain —
+and that domain WAS one keyframe segment, so velocity hit exactly zero at
+every keyframe. Replaced cam/look/drone sampling with one
+`CatmullRomCurve3` per channel (`curveType: 'centripetal'`, three's own
+default, passed explicitly), built from every keyframe's position in
+array order.
+
+The curve's `getPoint(u)` parameterizes `u` *uniformly by control-point
+index* (three.js: `p = (points.length-1)*u`), not by each keyframe's real
+`t` — this rig's keyframe spacing is deliberately uneven (teardown
+lingers, mission-map cruises, `t=0.20->0.22` is a 0.02-wide segment right
+next to `t=0.46->0.60` at 0.14 wide) and that unevenness *is* the hand-
+tuned pacing. Sampling the curve directly with raw T would have silently
+discarded all of it. Fix: `sampleKeyframes` keeps its existing t-bracket
+search (segment index `i`, local fraction `uRaw`) and remaps into the
+curve's own index-uniform space (`uCurve = (i + uRaw) / (KEYFRAMES.length
+- 1)`) — real per-keyframe timing is preserved exactly, the curve only
+supplies continuous SHAPE between the same points at the same T values
+the old lerp used. Position sampling uses raw `uRaw`, not smoothstepped —
+smoothstep is what caused the zero-derivative bug, so it had to come out
+of the position path entirely (kept only for the unrelated mobileGap/
+mobileLook scalar blends, which weren't part of the bug).
+
+Verification (both required by the brief, both actually run, not just
+reasoned through):
+- **NDC-at-exact-keyframe-t vs. pre-change baseline** (`__debugNDC`, all
+  15 keyframe t's, both viewports): max diff 0.0285 without camera drift,
+  0.0765 with drift active — both comfortably under the 0.1 budget, 0
+  failures. Makes sense by construction (a Catmull-Rom curve passes
+  through its own control points exactly at `uRaw=0/1`, same as the old
+  lerp did at its segment boundaries) but measured anyway rather than
+  assumed.
+- **Continuous-scroll SPD sampling** (real wall-clock scroll in ~25ms
+  steps, not jump-and-settle — jump-and-settle always reads SPD->0
+  eventually regardless of interpolation method, since T stops changing
+  once converged, so it can't distinguish the bug from correct behavior).
+  Baseline showed a sharp V-shaped dip at literally every one of the 13
+  intermediate keyframes (e.g. t=0.20: 0.9 -> 0.1 -> 1.1 m/s across a
+  ~50ms window); the spline build showed no dip pattern anywhere across
+  400 samples, SPD staying in a smooth 1.7-15.4 range through every same
+  crossing. 0 samples read exactly 0.0 in either build within T(0.01,
+  0.99) — the zero-hit was narrower than my 25ms sampling interval even
+  in the old build, which is exactly why "0.0 in every capture" needed
+  the *dip pattern*, not a literal zero count, as the diagnostic.
+
+Camera drift: constant sine offset (±0.05, three different frequencies/
+phases per axis so it doesn't read as a circular orbit) applied to
+`camera.position` in main.js's tick — AFTER copying the damped `camPos`,
+never written back into it, so it can't compound across frames or drag
+the real damped trajectory off course. `lookAt` runs after the drift is
+applied, so orientation naturally follows (gentle parallax, not a
+separate look-at wobble). Disabled on reduced-motion.
+
+**B. Text decode system.** New `src/hud/decode.js`: character scramble-to-
+lock for headings/row titles (glyph set `A-Z0-9/|\_`, ~180ms/char,
+stagger derived from a 600ms/line cap so long lines don't blow the
+budget), terminal type-on + double-blink caret for eyebrows, per-line
+stagger+blur (no scramble) for body copy, one shared 150ms opacity-out
+exit for all three. All batched-per-rAF-frame (one `textContent` write
+per animation frame regardless of line length, never one write per
+character) and reduced-motion-instant.
+
+Caught and fixed my own mistake before it shipped: first pass left
+teardown/project/inspection/landing's eyebrow/h2/sub EMPTY at construction
+time, populating them only when decode.js's activation fires. This is a
+pure client-rendered SPA with no server fallback — MISSION_PLAN §7's "real
+text must exist in DOM" can only mean *present once the page has loaded*,
+since a crawler has to execute JS to see anything on this site at all, and
+typically doesn't simulate scroll gestures. Gating section text behind a
+scroll-triggered reveal would have made it invisible to any crawler that
+doesn't scroll — a real SEO regression, and a worse outcome than the
+plain-fade version this replaced. Fixed by keeping the real text baked
+into the initial `innerHTML` (as it always was) and having decode.js's
+functions treat that as a visual layer on top — they clear and rebuild an
+element's contents to animate it, always ending on the exact text that
+was already there.
+
+Activation is edge-driven everywhere (content.js/callouts.js/
+projectCallouts.js each track their own previous-visible boolean and only
+call into decode.js on the false->true transition), never per scroll
+frame, per the brief's own rule. content.js's block-level `setVisible`
+also gained the 150ms fade-out on the falling edge — previously an
+instant `display:none` cut with no exit at all.
+
+gate.mjs's anti-emptiness check relaxed from requiring `.content-block`
+opacity>=0.9 to just `display !== 'none'` — "a line counts as visible
+from the moment its reveal starts," per the brief. Left the OVERLAP
+check's own opacity>=0.9 threshold untouched (rect-collection for "does
+this visually collide with the drone" should stay conservative; a
+barely-visible mid-decode line isn't a meaningful collision surface the
+same way a solid one is). In practice this pass's own architecture
+(blocks jump straight to opacity:1 on activation; only their child TEXT
+elements animate) meant the anti-emptiness check would have passed either
+way, but the rule is now explicit rather than incidental.
+
+**C. Font A/B.** `--font-display` was already a variable (no change
+needed there). Took the Chakra Petch shot against the current committed
+build, then temporarily edited `index.html` (added Rajdhani to the Google
+Fonts URL, weights 600;700 — loaded 700 too even though the brief said
+"600" specifically, so the existing `font-weight:700` heading rule
+wouldn't force a synthesized/faux-bold render and skew the comparison)
+and `tokens.css` (`--font-display: 'Rajdhani', sans-serif`), rebuilt,
+captured the Rajdhani shot, then reverted both files. Rebuilt again and
+confirmed the output bundle hash was byte-identical to the pre-experiment
+build (`index-CmBc_qSv.js` both times) — proof the revert left zero trace
+in the committed diff, not just an eyeballed one.
+
+**Gate result:** build 154.44 kB gz (well under the 165 kB target, still
+under v1.1-B's own budget despite the new spline/decode/drift code).
+`npm run gate`: 0 overlap failures and 0 anti-emptiness failures across
+both viewports, all 51 steps each — the overlap result specifically is
+the brief's own named risk ("framing may shift") for the spline change,
+and it's clean. 6 failures remain, all `type: overflow`, all mobile-only,
+all the identical pre-existing residuals already documented in the
+2026-07-22 entry below (teardown-block 349-357px vs. 346px budget,
+inspection-block 351px vs. 346px) — unchanged in T-location and magnitude
+by this pass's work, confirming decode.js's word-span DOM restructuring
+renders pixel-identical to plain text once settled (as designed).
+
 ## 2026-07-23 — Flagged for next pass (live review after v1.1-B, not fixed yet)
 
 Three real issues from live-site review, deliberately not fixed in the same
