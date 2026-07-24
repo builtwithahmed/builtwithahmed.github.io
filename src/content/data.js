@@ -124,11 +124,18 @@ export const landing = {
   direct: 'the.ahmed.hq@gmail.com',
 };
 
+// v1.3 Step 2.4: sub-copy shortened — each one previously repeated (or
+// nearly repeated) the label directly above it ("Upwork" / "Hire on
+// Upwork", "Email" / "Direct message"), which is exactly the redundancy
+// that left no width budget in the 2-up card grid (NOTES.md Step 1
+// diagnosis: only "Order a gig," the one already-terse line, ever fit
+// without wrapping). Shortened to the same register throughout rather
+// than trimming only the ones that happened to be too wide.
 export const contact = [
-  { label: 'Upwork', sub: 'Hire on Upwork', href: 'https://upwork.com', icon: 'U' },
+  { label: 'Upwork', sub: 'Hire me', href: 'https://upwork.com', icon: 'U' },
   { label: 'Fiverr', sub: 'Order a gig', href: 'https://fiverr.com', icon: 'F' },
-  { label: 'LinkedIn', sub: 'Connect with me', href: 'https://linkedin.com/in/sahil-ahmed-369231293/', icon: 'in' },
-  { label: 'Email', sub: 'Direct message', href: 'mailto:the.ahmed.hq@gmail.com', icon: '@' },
+  { label: 'LinkedIn', sub: 'Connect', href: 'https://linkedin.com/in/sahil-ahmed-369231293/', icon: 'in' },
+  { label: 'Email', sub: 'Message me', href: 'mailto:the.ahmed.hq@gmail.com', icon: '@' },
 ];
 
 export const skills = [

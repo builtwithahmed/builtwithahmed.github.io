@@ -185,7 +185,11 @@ body[data-layout='split'] .landing-block {
 .platform-links {
   margin-top: 18px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* v1.3 Step 2.4: minmax(0, ...) had no floor at all — a card could
+     shrink arbitrarily on a narrow viewport with nothing to stop it.
+     132px covers both reference viewports (155px/card at 390px stack,
+     145.2px/card inside the 24vw desktop sidebar) with room to spare. */
+  grid-template-columns: repeat(2, minmax(132px, 1fr));
   gap: 12px;
 }
 
@@ -226,12 +230,20 @@ body[data-layout='split'] .landing-block {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--signal);
+  white-space: nowrap;
 }
 
+/* v1.3 Step 2.4: 0.82rem (13.12px) was the pre-existing size; the shortened
+   copy already clears both viewports' card widths at that size with room
+   to spare, measured against this exact font (canvas text metrics). 0.75rem
+   is a deliberate floor on top of that margin, not a fix by itself — paired
+   with nowrap so a mid-word wrap is structurally impossible rather than
+   "shouldn't happen given current copy." */
 .platform-link small {
   font-family: var(--font-body);
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   color: var(--ink-dim);
+  white-space: nowrap;
 }
 
 .platform-link:hover {
