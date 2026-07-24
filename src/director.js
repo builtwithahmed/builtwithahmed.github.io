@@ -51,30 +51,35 @@ const KEYFRAMES = [
   // commit to an L offset until later regardless, which only makes this
   // safer, not riskier — content is farther from a still-centered drone.
   { t: 0.20, cam: [5.7, 2.96, -3.37], look: [0, 2.36, -11.33], drone: [-1.37, 2.39, -9.48], focus: 'L' },
-  { t: 0.22, cam: [5.8, 3.0, -4], look: [2.2, 2.4, -12], drone: [-1.5, 2.4, -10], focus: 'L', mobileLook: -0.6 }, // TEARDOWN (left)
+  // v1.3 Step 2.2: mobileLook y (in addition to the pre-existing x) lifts
+  // the exploded drone into its 55vh mobile allocation — see NOTES.md's
+  // Step 1 diagnosis. Desktop's own look.y is untouched; only the mobile
+  // override is added. Values bisected empirically against __debugNDC at
+  // 390x844, same method as every other mobileLook entry.
+  { t: 0.22, cam: [5.8, 3.0, -4], look: [2.2, 2.4, -12], drone: [-1.5, 2.4, -10], focus: 'L', mobileLook: { x: -0.6, y: 1.05 } }, // TEARDOWN (left)
   // Holds a strong L offset right up to the R transition — the origin-only
   // NDC check missed this, but the silhouette (full bounding-box) check
   // caught it: by t=0.30 the look-at had already interpolated to within
   // ~0.08 of neutral on its way toward idx @0.36's R offset, so the box's
   // right edge crossed into positive NDC while still labeled L. Drone
   // position matches the point already on the idx@0.22->idx@0.36 curve.
-  { t: 0.30, cam: [-1.23, 3.36, -7.64], look: [3.5, 2.64, -14.43], drone: [0.14, 2.7, -13.03], focus: 'L', mobileLook: 1.9 },
-  { t: 0.36, cam: [-5.8, 3.6, -10], look: [-1.5, 2.8, -16], drone: [1.2, 2.9, -15], focus: 'R', mobileLook: -0.285 }, // TEARDOWN (flipped)
+  { t: 0.30, cam: [-1.23, 3.36, -7.64], look: [3.5, 2.64, -14.43], drone: [0.14, 2.7, -13.03], focus: 'L', mobileLook: { x: 1.9, y: 1.1 } },
+  { t: 0.36, cam: [-5.8, 3.6, -10], look: [-1.5, 2.8, -16], drone: [1.2, 2.9, -15], focus: 'R', mobileLook: { x: -0.285, y: 1.35 } }, // TEARDOWN (flipped)
   // Amendment B gate (fully-on-screen): the raw interpolation between the
   // close-up teardown camera and the wide top-down mission-map camera
   // swings through a mid-transition pose that overshoots the R bound —
   // both endpoints are fine on their own, the swing between them isn't.
   // Drone position matches the point already on the idx@0.36->idx@0.46
   // curve; only cam/look retuned to close the gap during the swing.
-  { t: 0.4, cam: [-3.76, 5.68, -11.41], look: [-1.0, 2.45, -19.17], drone: [0.78, 2.79, -16.76], focus: 'R', mobileLook: 0.15 },
-  { t: 0.46, cam: [0, 9.5, -14], look: [-6, 1.8, -25], drone: [0, 2.6, -20], focus: 'R', mobileLook: -3.0 }, // MISSION MAP
-  { t: 0.60, cam: [0.5, 11.5, -21], look: [-11, 1.8, -30], drone: [-3.0, 3.8, -27], focus: 'R', mobileLook: -9.0 }, // MISSION MAP
+  { t: 0.4, cam: [-3.76, 5.68, -11.41], look: [-1.0, 2.45, -19.17], drone: [0.78, 2.79, -16.76], focus: 'R', mobileLook: { x: 0.15 } },
+  { t: 0.46, cam: [0, 9.5, -14], look: [-6, 1.8, -25], drone: [0, 2.6, -20], focus: 'R', mobileLook: { x: -3.0 } }, // MISSION MAP
+  { t: 0.60, cam: [0.5, 11.5, -21], look: [-11, 1.8, -30], drone: [-3.0, 3.8, -27], focus: 'R', mobileLook: { x: -9.0 } }, // MISSION MAP
   // Holds the R offset right up to the C transition — without this, the
   // interpolation toward idx @0.72's neutral look-at drifts the drone back
   // toward center before the focus label itself flips (caught by the P1
   // NDC gate at t=0.70). Drone position here matches the point already on
   // the idx@0.60->idx@0.72 curve at t=0.70 — only cam/look were retuned.
-  { t: 0.70, cam: [6.06, 5.48, -29.33], look: [-9, 2.45, -37.4], drone: [-0.22, 2.87, -35.33], focus: 'R', mobileLook: -6.3 },
+  { t: 0.70, cam: [6.06, 5.48, -29.33], look: [-9, 2.45, -37.4], drone: [-0.22, 2.87, -35.33], focus: 'R', mobileLook: { x: -6.3 } },
   // P2.7 Stage 2: relabeled 'C' -> 'L' (numerics untouched — same precedent
   // as the t=0.20 relabel above). This keyframe and t=0.84 were both
   // already 'L'-adjacent, but the short 'C' label here forced content to
@@ -85,8 +90,8 @@ const KEYFRAMES = [
   // requirement of their own, committing this one to 'L' merges the two
   // segments into one stable dock window instead of flickering through
   // bottom-third and back.
-  { t: 0.72, cam: [6.5, 5.0, -30], look: [0, 2.5, -38], drone: [0, 2.8, -36], focus: 'L', mobileLook: 0 }, // descend to structure
-  { t: 0.84, cam: [4.8, 5.2, -40], look: [2.0, 4.5, -44], drone: [-1.2, 4.6, -42.5], focus: 'L', mobileLook: -1.15 }, // INSPECTION
+  { t: 0.72, cam: [6.5, 5.0, -30], look: [0, 2.5, -38], drone: [0, 2.8, -36], focus: 'L', mobileLook: { x: 0 } }, // descend to structure
+  { t: 0.84, cam: [4.8, 5.2, -40], look: [2.0, 4.5, -44], drone: [-1.2, 4.6, -42.5], focus: 'L', mobileLook: { x: -1.15 } }, // INSPECTION
   // Amendment B gate: raw interpolation between the INSPECTION orbit and
   // the RTL descent swings well left of center despite both endpoints'
   // look-at being fairly neutral — same "swing between distinct camera
@@ -107,13 +112,29 @@ const KEYFRAMES = [
   // faking the offset with camera angle alone while the pad stays at
   // world x=0 — the same pattern the inspection tower already uses
   // (off-axis at x=-4.2, not centered).
-  { t: 0.9, cam: [2.6, 4.6, -44], look: [-2.0, 2.3, -50], drone: [1.2, 3.0, -47], focus: 'R', mobileLook: -2.0 },
-  { t: 0.93, cam: [2.2, 4.3, -47], look: [-2.2, 1.7, -53], drone: [2.4, 2.6, -52], focus: 'R', mobileLook: -1.5 }, // RTL
+  // v1.3 Step 2.2: mobileLook.x retuned across all three landing keyframes
+  // (was -2.0/-1.5/-1.5, i.e. flat/matching desktop's own look.x at two of
+  // the three points) — NOTES.md's Step 1 diagnosis found the mobile gap
+  // (drone.x - mobileLook.x) held steady-to-desktop or even widened across
+  // the approach while drone.x climbed toward off-axis Pad-B (3.0), which
+  // is backwards: mobile's narrower effective horizontal FOV needs a
+  // SMALLER gap than desktop throughout, not an equal one. Bisected against
+  // __debugNDC (390x844) until the drone's own bbox sits on-screen at
+  // t=0.93/0.95/0.97/1.00, not just its origin point.
+  // y added after the first x-only pass measurably overlapped the mobile
+  // landing-block's content rect (Table E/G-style point check, per NOTES.md
+  // precedent): pulling the drone on-screen horizontally, at the same
+  // vertical framing, dropped it low enough to sit over the content column
+  // — mobile stack layout has no L/R split to dodge into, content claims
+  // the full width, so the only dodge is vertical. Same "look below the
+  // subject to push it up in frame" technique as t=0.00's hero keyframe.
+  { t: 0.9, cam: [2.6, 4.6, -44], look: [-2.0, 2.3, -50], drone: [1.2, 3.0, -47], focus: 'R', mobileLook: { x: -0.8, y: 0.3 } },
+  { t: 0.93, cam: [2.2, 4.3, -47], look: [-2.2, 1.7, -53], drone: [2.4, 2.6, -52], focus: 'R', mobileLook: { x: 0.2, y: -0.3 } }, // RTL
   // P2.7 Stage 2: drone.y tightened 0.3 -> 0.22 — the skids/legs (drone.js,
   // local y -0.2/-0.21) were still hovering ~0.16 above Pad-B's surface
   // (y=0.02) at the old value, not "settled." 0.22 puts the leg bottoms
   // right at the pad, a real touchdown rather than a close hover.
-  { t: 1.00, cam: [1.0, 5.0, -49], look: [-1.5, 0.6, -55], drone: [3.0, 0.22, -55], focus: 'R', mobileLook: -1.5 }, // LANDING, on Pad-B
+  { t: 1.00, cam: [1.0, 5.0, -49], look: [-1.5, 0.6, -55], drone: [3.0, 0.22, -55], focus: 'R', mobileLook: { x: 0.8, y: -1.4 } }, // LANDING, on Pad-B
 
 ];
 
@@ -159,6 +180,19 @@ function smoothstep(u) {
   return u * u * (3 - 2 * u);
 }
 
+// v1.3 Step 2.2: shared by both axes of the mobileLook vector. null when
+// NEITHER keyframe specifies this axis (caller falls back to the existing
+// gap-scale formula, x-only, or to the plain desktop value, y); when only
+// one side specifies it, the other falls back to ITS OWN desktop value for
+// that axis so the blend still lands exactly on the authored override at
+// uRaw=0/1 rather than interpolating from some unrelated neighbor value.
+function blendMobileAxis(aOverride, bOverride, aDefault, bDefault, u) {
+  if (aOverride === undefined && bOverride === undefined) return null;
+  const from = aOverride ?? aDefault;
+  const to = bOverride ?? bDefault;
+  return from + (to - from) * u;
+}
+
 function sampleKeyframes(t) {
   let i = 0;
   while (i < KEYFRAMES.length - 2 && KEYFRAMES[i + 1].t < t) i++;
@@ -174,14 +208,19 @@ function sampleKeyframes(t) {
   const gapA = a.mobileGap ?? LATERAL_SCALE_MOBILE;
   const gapB = b.mobileGap ?? LATERAL_SCALE_MOBILE;
   // Some segments don't respond usably to proportional gap scaling at all
-  // (see director.js history) — mobileLook is an absolute look.x override
-  // for stack layout, used instead of the scaled-gap formula when present.
-  const mobileLookA = a.mobileLook ?? null;
-  const mobileLookB = b.mobileLook ?? null;
-  const mobileLook =
-    mobileLookA !== null || mobileLookB !== null
-      ? (mobileLookA ?? a.look[0]) + ((mobileLookB ?? b.look[0]) - (mobileLookA ?? a.look[0])) * u
-      : null;
+  // (see director.js history) — mobileLook is an absolute look override for
+  // stack layout, used instead of the scaled-gap formula when present.
+  //
+  // v1.3 Step 2.2: generalized from an x-only scalar to a per-axis {x, y}
+  // vector (one mechanism, not a second x-only field plus a new y-only
+  // field) — landing needed x (tracking the drone toward off-axis Pad-B)
+  // and teardown needed y (lifting the exploded drone into its mobile
+  // budget) on different keyframes, so both axes independently fall back
+  // to the desktop-sampled value when a keyframe doesn't specify that axis.
+  // blendAxis reduces to exactly the old formula when only .x is ever set,
+  // so every pre-existing x-only keyframe is unaffected.
+  const mobileLookX = blendMobileAxis(a.mobileLook?.x, b.mobileLook?.x, a.look[0], b.look[0], u);
+  const mobileLookY = blendMobileAxis(a.mobileLook?.y, b.mobileLook?.y, a.look[1], b.look[1], u);
   // Remap [segment index i, local fraction uRaw] into the curve's own
   // uniform-per-point parameter space — matches CatmullRomCurve3.getPoint's
   // internal `p = (points.length-1)*u` exactly, so uCurve = i+uRaw here
@@ -194,7 +233,8 @@ function sampleKeyframes(t) {
     look: lookCurve.getPoint(uCurve, lookPoint).toArray(),
     drone: droneCurve.getPoint(uCurve, dronePoint).toArray(),
     mobileGap: gapA + (gapB - gapA) * u,
-    mobileLook,
+    mobileLookX,
+    mobileLookY,
     // T approaches any target asymptotically from below and never exactly
     // reaches it, so sampling right at a keyframe's own t always lands with
     // uRaw -> 1 (interpolated values basically AT the next keyframe) while
@@ -297,10 +337,16 @@ export function createDirector() {
     const gapScale = state.layout === 'stack' ? sample.mobileGap : 1;
     state.cam = sample.cam;
     const lookX =
-      state.layout === 'stack' && sample.mobileLook !== null
-        ? sample.mobileLook
+      state.layout === 'stack' && sample.mobileLookX !== null
+        ? sample.mobileLookX
         : sample.drone[0] + (sample.look[0] - sample.drone[0]) * gapScale;
-    state.look = [lookX, sample.look[1], sample.look[2]];
+    // v1.3 Step 2.2: same override pattern as X, for the teardown Y-lift —
+    // no gap-scale equivalent for Y (there never was one), so absent an
+    // override this is byte-identical to pre-2.2 behavior (plain desktop
+    // look.y, every keyframe, both layouts).
+    const lookY =
+      state.layout === 'stack' && sample.mobileLookY !== null ? sample.mobileLookY : sample.look[1];
+    state.look = [lookX, lookY, sample.look[2]];
     prevDronePos = state.dronePos;
     state.dronePos = sample.drone;
     state.focus = sample.focus;
