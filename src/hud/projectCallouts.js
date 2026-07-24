@@ -5,6 +5,7 @@
 import { Vector3 } from 'three';
 import '../styles/callouts.css';
 import { projects } from '../content/data.js';
+import { decodeHeading, decodeBody } from './decode.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const BAND_START = 0.44;
@@ -36,12 +37,20 @@ export function createProjectCallouts({ camera, waypoints, mountEl }) {
       <p>${project.blurb}</p>
       <div class="tags">
         ${project.tags.map((tag) => `<span class="tag">${tag}</span>`).join('')}
-        <a class="tag" href="${project.github}" target="_blank" rel="noreferrer">GitHub</a>
       </div>
     `;
     mountEl.appendChild(label);
 
-    return { project, waypoint: waypoints[index], path, dot, label };
+    return {
+      project,
+      waypoint: waypoints[index],
+      path,
+      dot,
+      label,
+      h3: label.querySelector('h3'),
+      p: label.querySelector('p'),
+      wasVisible: false,
+    };
   });
 
   const worldPos = new Vector3();
@@ -51,6 +60,7 @@ export function createProjectCallouts({ camera, waypoints, mountEl }) {
     item.label.classList.remove('visible', 'active');
     item.path.style.opacity = '0';
     item.dot.style.opacity = '0';
+    item.wasVisible = false;
   }
 
   function update(state) {
@@ -75,6 +85,12 @@ export function createProjectCallouts({ camera, waypoints, mountEl }) {
       if (offscreen) return hide(item);
 
       const active = i === bandIndex;
+      // v1.2 #B: decode in once per activation, same rule as callouts.js.
+      if (!item.wasVisible) {
+        decodeHeading(item.h3, `${item.project.wpt} · ${item.project.title}`);
+        decodeBody(item.p);
+      }
+      item.wasVisible = true;
       item.label.classList.add('visible');
       item.label.classList.toggle('active', active);
 

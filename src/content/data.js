@@ -34,50 +34,47 @@ export const missionLog = {
 };
 
 // §6.3's WPT-01..06 order matches the flight path/map waypoints 1:1 (map.js
-// WAYPOINTS array) — real GitHub links pending Ahmed's confirmation, so
-// every entry uses the same placeholder MISSION_PLAN.md §6.3 specifies.
+// WAYPOINTS array). v1.2.1 #5: these repos don't exist yet, so there's no
+// real link to show — no `github` field, no icon/anchor in the card
+// template (projectCallouts.js) rather than shipping a placeholder
+// https://github.com dead link. Re-add both together once real repo URLs
+// exist.
 export const projects = [
   {
     wpt: 'WPT-01',
     title: 'ArduPilot Log Parser',
     blurb: 'Parses ArduPilot .BIN flight logs — GPS, IMU, attitude, battery, and error data into structured CSV/JSON.',
     tags: ['Python', 'MAVLink', 'Data'],
-    github: 'https://github.com',
   },
   {
     wpt: 'WPT-02',
     title: 'FastAPI Backend Starter',
     blurb: 'Production template — JWT auth, CRUD, Supabase, CORS, Render deploy config. Fork and ship.',
     tags: ['FastAPI', 'Supabase', 'JWT'],
-    github: 'https://github.com',
   },
   {
     wpt: 'WPT-03',
     title: 'Drone Telemetry Dashboard',
     blurb: 'Real-time web dashboard for flight telemetry — GPS path, altitude, battery, anomalies over live MAVLink.',
     tags: ['Python', 'MAVLink', 'Charts'],
-    github: 'https://github.com',
   },
   {
     wpt: 'WPT-04',
     title: 'Google Sheets Automation',
     blurb: 'Apps Script system automating workflows — data sync, reports, email triggers, dashboards.',
     tags: ['Apps Script', 'Sheets API'],
-    github: 'https://github.com',
   },
   {
     wpt: 'WPT-05',
     title: 'File Storage API (R2 + FastAPI)',
     blurb: 'Upload/download REST API on Cloudflare R2 — presigned URLs, metadata, access control.',
     tags: ['FastAPI', 'R2', 'S3 API'],
-    github: 'https://github.com',
   },
   {
     wpt: 'WPT-06',
     title: 'YouTube Tools Suite',
     blurb: 'Content automation — subtitle generation, thumbnail batching, metadata via YouTube Data API.',
     tags: ['Python', 'YouTube API'],
-    github: 'https://github.com',
   },
 ];
 
