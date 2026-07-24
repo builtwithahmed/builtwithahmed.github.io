@@ -40,6 +40,11 @@ const VIEWPORTS = [
   { name: '390x844', width: 390, height: 844 },
 ];
 const STEPS = Array.from({ length: 51 }, (_, i) => i / 50);
+// v1.2.1 Step 2: camera drift (main.js) is wall-clock driven, so an unpinned
+// gate run samples it at whatever phase the settle timing happened to land
+// on. DRIFT_PHASE pins it via window.__setDriftPhase for a reproducible run;
+// unset (default) leaves drift live, matching pre-v1.2.1 behavior.
+const DRIFT_PHASE = process.env.DRIFT_PHASE !== undefined ? Number(process.env.DRIFT_PHASE) : null;
 
 async function waitForT(page, target, { epsilon = 0.0015, timeoutMs = 15000, intervalMs = 150 } = {}) {
   const start = Date.now();
@@ -95,6 +100,8 @@ try {
   process.exit(1);
 }
 
+console.log(DRIFT_PHASE !== null ? `drift phase: pinned p=${DRIFT_PHASE}` : 'drift phase: live (unpinned)');
+
 const browser = await chromium.launch();
 let totalFailures = 0;
 const failureLog = [];
@@ -103,6 +110,9 @@ for (const vp of VIEWPORTS) {
   const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForTimeout(300);
+  if (DRIFT_PHASE !== null) {
+    await page.evaluate((p) => window.__setDriftPhase(p), DRIFT_PHASE);
+  }
 
   for (const t of STEPS) {
     await page.evaluate((tt) => {
