@@ -55,13 +55,33 @@ export function createHelipad(x = 0, z = 0, { brightPad = true } = {}) {
   // marking, not a light source; it should read via the key/rim lights
   // like the rest of the pad, not glow on its own. No `emissive` at all,
   // so it can never catch bloom regardless of tuning elsewhere.
+  //
+  // v1.3 Step 2.1: the oval survived that fix anyway (proven via
+  // __debugSetComposer(false) and hiding this exact mesh — see NOTES.md).
+  // Root cause: metalness 0.5 / roughness 0.35 at this ring's grazing angle
+  // to the hero camera produces a broad, soft specular lobe from the key/
+  // hemi lights — the "glow" was never emissive or bloom, it's an ordinary
+  // lit-metal highlight wide enough to read as a stain behind the text.
+  // Lower roughness values (tried down to metalness 0/0.1) made it WORSE,
+  // not better — less roughness/metalness sharpens the lobe back down to
+  // the ring's own true geometric edge, which reads as an even more
+  // legible outline traced behind the headline. Higher roughness (same
+  // metalness) spreads the same reflected energy thin enough that neither
+  // a soft blob nor a crisp edge survives; a modest color darken on top
+  // trims the last bit of residual brightness. Verified empirically
+  // (__debugSilhouetteOverlap + direct screenshot, both required per the
+  // P2.6 precedent) at composer on/off and tier HIGH/LOW alike — this is a
+  // property of the lit material, not the post pipeline, so it holds
+  // under every rendering path. Hero-only: brightPad stays false, and
+  // Pad-B's own brightPad:true branch (its own separate v1.1-B tuning) is
+  // untouched.
   const markMat = new MeshStandardMaterial(
-    brightPad ? { color: 0x2e6672, roughness: 0.35, metalness: 0.5 } : { color: 0x1c4650, roughness: 0.35, metalness: 0.5 }
+    brightPad ? { color: 0x2e6672, roughness: 0.35, metalness: 0.5 } : { color: 0x122a30, roughness: 0.68, metalness: 0.5 }
   );
   const ringMat = new MeshStandardMaterial(
     brightPad
       ? { color: 0x2e6672, roughness: 0.35, metalness: 0.5, emissive: 0x1c4650, emissiveIntensity: 0.18 }
-      : { color: 0x1c4650, roughness: 0.35, metalness: 0.5 }
+      : { color: 0x122a30, roughness: 0.68, metalness: 0.5 }
   );
 
   const ring = new Mesh(new RingGeometry(1.48, 1.64, 40), ringMat);
