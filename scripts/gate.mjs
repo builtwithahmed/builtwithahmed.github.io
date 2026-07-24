@@ -1,5 +1,5 @@
 // Permanent post-build gate: run against `npm run preview` (not `dev`).
-// Four checks, 51 T-steps (0, 0.02, ..., 1.00) per viewport:
+// Five checks, 51 T-steps (0, 0.02, ..., 1.00) per viewport:
 //
 //  1. Overlap — point-based (NOTES.md "Table E/G are the trustworthy
 //     gates; Table D [[a Box3 AABB]] overstates"): projects each drone
@@ -32,6 +32,20 @@
 //     duration of an actual reveal transition (cleared on completion);
 //     this check fails if the SAME .blurb is still marked revealing more
 //     than 700ms after first observed, at any T step.
+//  5. Leader-line overlap (v1.3 Step 3) — check 1 only ever covered the DOM
+//     rects in its own `rects` array against drone component points; it had
+//     no notion of the `.callout-line`/`.project-callouts-svg` SVG path
+//     geometry at all, so a leader line crossing a heading (confirmed live,
+//     mobile t≈0.30, a line through "What I Work With" — NOTES.md) was
+//     structurally invisible to it, the same "the gate can't see this" gap
+//     the anti-emptiness check (2) closed for a different case. Every
+//     visible `.callout-line` is a fixed 4-point elbow
+//     (callouts.js/projectCallouts.js); this samples points along each of
+//     its 3 segments and flags any that land inside a visible content rect
+//     OTHER than that line's own destination label (id-linked via
+//     `path.dataset.targetLabel`, so the one rect a line is SUPPOSED to
+//     enter isn't a false positive) — same point-sampled methodology as
+//     the drone check, applied to line geometry instead of a single point.
 import { chromium } from 'playwright';
 
 // v1.3 Step 2.0: headless Chromium's WebGL context is SwiftShader (software),
@@ -168,6 +182,73 @@ for (const vp of VIEWPORTS) {
         }
       }
 
+      // v1.3 Step 3: leader-line check. callouts.js/projectCallouts.js both
+      // emit a fixed 4-point "M x y L x y L x y L x y" elbow path per
+      // .callout-line; sample points along every segment (not just the
+      // vertices — a straight-line intersection could hide entirely
+      // between two sampled endpoints, same reasoning as the drone
+      // component check's own point sampling) and flag any that land
+      // inside a visible content rect OTHER than the line's own
+      // destination label.
+      //
+      // Deliberately a NARROWER rect set than check 1's own `rects`
+      // (which uses the whole padded .content-block, the right proxy for
+      // "is the drone silhouette under the content column"): a content
+      // block's own bounding rect includes its own padding on every side
+      // (content.css, e.g. `padding: 4vh 3vw`), and a line legitimately
+      // entering its destination label from outside the block necessarily
+      // crosses that padding — real empty space, not the heading/sub/row
+      // text this check actually cares about (the brief's own wording).
+      // Testing against the padded block rect flagged that empty-padding
+      // crossing as a false failure. `.teardown-header` (eyebrow+h2+sub,
+      // shared markup across every content-block variant) plus every
+      // OTHER visible label/row is the real "don't cross this" set.
+      const leaderLineRects = [];
+      document.querySelectorAll('.content-block').forEach((block) => {
+        if (getComputedStyle(block).display === 'none') return;
+        const opacity = block.style.opacity === '' ? 1 : Number(block.style.opacity);
+        if (opacity < 0.9) return;
+        const header = block.querySelector('.teardown-header');
+        if (header) leaderLineRects.push({ el: header, rect: header.getBoundingClientRect() });
+      });
+      document.querySelectorAll('.callout-label.visible, .console-row.visible').forEach((el) => {
+        leaderLineRects.push({ el, rect: el.getBoundingClientRect() });
+      });
+
+      const SAMPLES_PER_SEGMENT = 12;
+      const leaderLineHits = [];
+      document.querySelectorAll('.callout-line').forEach((path) => {
+        if (Number(getComputedStyle(path).opacity) <= 0) return;
+        const d = path.getAttribute('d');
+        if (!d) return;
+        const nums = (d.match(/-?[\d.]+/g) || []).map(Number);
+        if (nums.length < 4) return;
+        const pts = [];
+        for (let i = 0; i < nums.length; i += 2) pts.push({ x: nums[i], y: nums[i + 1] });
+
+        const ownLabel = document.getElementById(path.dataset.targetLabel || '');
+        const hits = [];
+        for (let s = 0; s < pts.length - 1; s++) {
+          const a = pts[s];
+          const b = pts[s + 1];
+          for (let i = 0; i <= SAMPLES_PER_SEGMENT; i++) {
+            const u = i / SAMPLES_PER_SEGMENT;
+            const px = { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
+            for (const entry of leaderLineRects) {
+              if (entry.el === ownLabel) continue; // legitimate destination
+              const r = entry.rect;
+              if (r.width === 0 || r.height === 0) continue;
+              if (px.x >= r.left && px.x <= r.right && px.y >= r.top && px.y <= r.bottom) {
+                hits.push({ px, rectClass: entry.el.className, rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
+              }
+            }
+          }
+        }
+        if (hits.length) {
+          leaderLineHits.push({ targetLabel: path.dataset.targetLabel, d, hitCount: hits.length, firstHit: hits[0] });
+        }
+      });
+
       // v1.2.1 Step 4: strict opacity>=0.9 bar restored for everything
       // except .blurb (below) — a bare display:block/.visible class is no
       // longer sufficient on its own.
@@ -216,7 +297,7 @@ for (const vp of VIEWPORTS) {
         }
       });
 
-      return { overlaps, anyVisible, clipped, layout: ndc.layout, focus: ndc.focus };
+      return { overlaps, anyVisible, clipped, leaderLineHits, layout: ndc.layout, focus: ndc.focus };
     });
 
     if (result.overlaps.length) {
@@ -226,6 +307,10 @@ for (const vp of VIEWPORTS) {
     if (!result.anyVisible) {
       totalFailures++;
       failureLog.push({ vp: vp.name, t: t.toFixed(2), settledT, type: 'empty', layout: result.layout, focus: result.focus });
+    }
+    if (result.leaderLineHits.length) {
+      totalFailures++;
+      failureLog.push({ vp: vp.name, t: t.toFixed(2), settledT, type: 'leader-line-overlap', detail: result.leaderLineHits });
     }
     if (result.clipped.length) {
       totalFailures++;

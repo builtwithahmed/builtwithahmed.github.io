@@ -23,7 +23,7 @@ export function createCallouts({ camera, drone, mountEl }) {
   svg.setAttribute('aria-hidden', 'true');
   document.body.appendChild(svg);
 
-  const items = skills.map((skill) => {
+  const items = skills.map((skill, index) => {
     const path = document.createElementNS(SVG_NS, 'path');
     path.classList.add('callout-line');
     svg.appendChild(path);
@@ -40,6 +40,11 @@ export function createCallouts({ camera, drone, mountEl }) {
 
     const label = document.createElement('div');
     label.className = 'callout-label';
+    // v1.3 Step 3: id link so the gate's leader-line check can tell "this
+    // line's own destination rect" (legitimately allowed to be entered)
+    // apart from every other content rect (not allowed to be crossed).
+    label.id = `callout-label-teardown-${index}`;
+    path.dataset.targetLabel = label.id;
     label.innerHTML = `
       <h3>${skill.title}</h3>
       <p>${skill.blurb}</p>
@@ -115,7 +120,21 @@ export function createCallouts({ camera, drone, mountEl }) {
       if (labelRect.width === 0) return; // not laid out yet (display:none this frame)
       const anchorX = dockRight ? labelRect.left : labelRect.right;
       const anchorY = Math.min(Math.max(sy, labelRect.top), labelRect.bottom);
-      const elbowX = sx + (anchorX - sx) * 0.45;
+      // v1.3 Step 3: route the vertical run OUTSIDE the docked content
+      // BLOCK's own horizontal span (not just this label's, which sits
+      // narrower/inset within it) — a vertical segment anywhere inside the
+      // block eventually crosses SOMETHING there (a heading, another row)
+      // purely from Y-alignment, regardless of which X inside the block it
+      // picks. Confirmed live: mobile t≈0.30 crossed the teardown heading
+      // this way (NOTES.md). Staying outside the whole block (the seam
+      // between the 3D half and the content half, per MISSION_PLAN §3)
+      // sidesteps the entire class of "line crosses unrelated content,"
+      // not just this one reported instance — margining off the label's
+      // own (narrower) edge measurably wasn't enough on its own.
+      const blockRect = item.label.closest('.content-block')?.getBoundingClientRect() ?? labelRect;
+      const blockEdge = dockRight ? blockRect.left : blockRect.right;
+      const ELBOW_MARGIN = 10;
+      const elbowX = dockRight ? Math.min(sx, blockEdge - ELBOW_MARGIN) : Math.max(sx, blockEdge + ELBOW_MARGIN);
 
       item.path.setAttribute('d', `M ${sx} ${sy} L ${elbowX} ${sy} L ${elbowX} ${anchorY} L ${anchorX} ${anchorY}`);
       item.path.classList.toggle('active', active);

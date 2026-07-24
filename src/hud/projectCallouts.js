@@ -32,6 +32,10 @@ export function createProjectCallouts({ camera, waypoints, mountEl }) {
 
     const label = document.createElement('div');
     label.className = 'callout-label';
+    // v1.3 Step 3: same id-link purpose as callouts.js — lets the gate's
+    // leader-line check exclude this line's own destination rect.
+    label.id = `callout-label-project-${index}`;
+    path.dataset.targetLabel = label.id;
     label.innerHTML = `
       <h3>${project.wpt} · ${project.title}</h3>
       <p>${project.blurb}</p>
@@ -106,7 +110,14 @@ export function createProjectCallouts({ camera, waypoints, mountEl }) {
       if (labelRect.width === 0) return;
       const anchorX = dockRight ? labelRect.left : labelRect.right;
       const anchorY = Math.min(Math.max(sy, labelRect.top), labelRect.bottom);
-      const elbowX = sx + (anchorX - sx) * 0.45;
+      // v1.3 Step 3: same routing fix as callouts.js — route outside the
+      // docked content BLOCK's own span (not just this label's, narrower/
+      // inset within it) so the run can't cross content sharing its X
+      // range further down/up the block.
+      const blockRect = item.label.closest('.content-block')?.getBoundingClientRect() ?? labelRect;
+      const blockEdge = dockRight ? blockRect.left : blockRect.right;
+      const ELBOW_MARGIN = 10;
+      const elbowX = dockRight ? Math.min(sx, blockEdge - ELBOW_MARGIN) : Math.max(sx, blockEdge + ELBOW_MARGIN);
 
       item.path.setAttribute('d', `M ${sx} ${sy} L ${elbowX} ${sy} L ${elbowX} ${anchorY} L ${anchorX} ${anchorY}`);
       item.path.classList.toggle('active', active);
