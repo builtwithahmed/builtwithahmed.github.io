@@ -240,6 +240,16 @@ export function createContent() {
     const windowMin = isMobile ? serviceBandIndex : serviceBandIndex - 1;
     const windowMax = serviceBandIndex + 1;
     serviceRows.forEach((entry, i) => {
+      // v1.3 Step 2.3: tried nudging row 1's own reveal ~0.01 earlier (the
+      // desktop entry-edge sparse-column finding from NOTES.md's Step 1
+      // diagnosis) — reverted per the brief's own instruction after it
+      // introduced a NEW mobile-only gate failure: the earlier threshold
+      // also applies under mobile's windowing (windowMax already includes
+      // bandIndex+1 the same way desktop's does; only windowMin differs
+      // between them), and inspection-block was already right at its
+      // mobile overflow budget, so the extra row pushed a t=0.74 overflow
+      // from ~351px to 418px. Dropped from this pass rather than adding a
+      // mobile-only carve-out, which the instruction didn't ask for.
       const revealed = inServicesRange && (reducedMotion ? true : T >= SERVICES_START + i * serviceBandWidth);
       const inWindow = i >= windowMin && i <= windowMax;
       const visible = revealed && inWindow;

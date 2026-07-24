@@ -3,6 +3,161 @@
 Log of what was tried and rejected, per MISSION_PLAN.md §0, so later phases
 don't repeat dead ends. Newest entries at the top.
 
+## 2026-07-24 — v1.3 visual debt pass: tier pinning, hero material fix, mobile
+## framing generalized, leader-line gate check
+
+**Tier pinning (2.0).** Headless Chromium's WebGL context is SwiftShader
+(software), which `scene/tier.js`'s renderer blacklist self-reports as
+`tier: LOW` — and LOW makes `post.js` skip the whole composer (bloom/
+vignette/grain) silently. `gate.mjs`/`shots.mjs`/`verify.mjs` were all doing
+this unpinned, meaning every prior gate/shots run (this entire file's history
+included) was checking the no-composer path, not what a real HIGH-tier
+desktop visitor's GPU renders. All three now default to `?tier=HIGH` via a
+`CAPTURE_TIER` env var (override to LOW/MED to deliberately test that path).
+Caught while diagnosing 1A below — the first composer-on/off A/B under plain
+`?debug` produced identical numbers both ways, which should have been the
+tell.
+
+**Hero oval (2.1) — corrects the 2026-07-23 v1.1-B conclusion below.** That
+entry attributed the residual glow behind the hero headline to `post.js`'s
+vignette. Rigorous re-check (composer fully disabled via
+`__debugSetComposer(false)`, and separately hiding the hero pad object via
+`__debugLayers.helipad.visible = false`) showed the oval survives — and
+reads *more* clearly — with the composer off, ruling out bloom/vignette
+outright; hiding the pad object removes it completely. Root cause: the
+hero pad's ring/mark material (`environment.js`'s `brightPad: false`
+branch — metalness 0.5, roughness 0.35) produces a broad, soft specular
+lobe from the key/hemi lights at this camera's grazing angle — an ordinary
+lit-metal highlight, never emissive, never bloom. Tried reducing metalness
+(down to 0) first: made it *worse* — less metalness sharpens the response
+back down to the ring's true geometric edge, which reads as an even more
+legible outline traced behind the text. Fix that actually worked: raise
+roughness to 0.68 (same metalness, 0.5) to spread the same reflected energy
+thin enough that neither a soft blob nor a crisp edge survives, plus a
+modest color darken (`0x1c4650` -> `0x122a30`) for the last bit of residual
+brightness. Verified at both tier=HIGH and tier=LOW (LOW has no vignette to
+help mask it, so a fainter residual remains there — accepted, since further
+darkening for LOW's sake started to visibly under-light Pad-B's own
+diegetic reading on HIGH, the majority case). Pad-B (`brightPad: true`)
+untouched, confirmed via direct material read.
+
+**Mobile framing (2.2): `mobileLook` generalized from an x-only scalar to a
+per-axis `{x, y}` vector** (one mechanism, `blendMobileAxis` in
+`director.js`, backward-compatible with every existing x-only entry).
+Landing x retuned (t=0.90/0.93/1.00: -0.8/0.2/0.8, was -2.0/-1.5/-1.5) so the
+mobile gap shrinks instead of holding flat/matching desktop while drone.x
+climbs toward off-axis Pad-B. Teardown y added (t=0.22/0.30/0.36:
+1.05/1.1/1.35) to lift the exploded drone into its mobile vertical
+allocation. **First pass at the landing x retune introduced a real overlap
+regression**, caught by the same point-based Table E method the gate
+already uses (not just eyeballing): pulling the drone further on-screen
+horizontally, at the same vertical framing, dropped it low enough to
+overlap the mobile `.landing-block`'s content rect — mobile stack layout has
+no L/R split to dodge into, content claims the full width, so the only
+dodge is vertical. Fixed by adding landing-keyframe y overrides too
+(t=0.90/0.93/1.00: 0.3/-0.3/-1.4). Re-verified: 0 overlaps at
+t=0.90/0.93/0.95/0.97/1.00. Desktop proven byte-stable: two independent
+before/after `__debugNDC()` captures across all 15 keyframes (git-stashed
+`director.js` for a clean "before" build) — origin and per-component NDC
+(Table E, the trustworthy metric) differ by ≤0.00095, floating-point noise;
+raw AABB corners (Table D, already documented as noisy from explode-state
+sensitivity to T-convergence timing) differ by ≤0.0034 with a long enough
+settle, confirming that metric's own noise floor rather than a real
+regression — first attempt at this same proof used a looser epsilon/settle
+and saw up to 0.07 AABB delta, which evaporated entirely once settle time
+was extended, not from any code change.
+
+**Inspection entry retime (2.3) — tried, reverted per the brief's own
+instruction.** Nudging row 1's reveal ~0.01 earlier (desktop entry-edge
+sparse-column finding, T=0.72) also fires on mobile: mobile's window
+already includes `bandIndex+1` the same way desktop's does (only
+`windowMin` differs between them, not `windowMax`), and
+`.inspection-block` was already at its mobile overflow budget — the extra
+row pushed a new overflow at t=0.74 from ~351px to 418px. Dropped rather
+than adding a mobile-only carve-out the instruction didn't ask for.
+
+**Contact cards (2.4).** Sub-copy shortened (`Hire on Upwork`->`Hire me`,
+`Connect with me`->`Connect`, `Direct message`->`Message me`; `Order a gig`
+unchanged) — each one previously repeated the label directly above it,
+which is exactly the redundancy that left no width budget in the 2-up
+grid. Added a real floor: `.platform-links` grid columns
+`minmax(0,1fr)` -> `minmax(132px,1fr)`, sub-copy font-size 0.82rem ->
+0.75rem plus `white-space: nowrap` on both label and sub (turns "shouldn't
+wrap given current copy" into "structurally cannot wrap"). Verified 0
+wraps, both viewports, all 8 cards (4 x 2).
+
+**Leader-line gate check (Step 3) — two real bugs in the check itself,
+caught before trusting its output.** (1) First version excluded a line's
+own destination label as one entry in the shared rect list, but the label
+is nested inside its parent `.content-block` — a sample point legitimately
+inside the label is geometrically also inside that parent's bounding rect,
+so entering its own destination still registered as a false hit against
+the parent. Fixed by skipping any sample point inside the own label
+entirely, before testing it against anything. (2) Even fixed, the routing
+patch (below) still showed hits against `.content-block` specifically in
+the gap between a content block's own outer padding and where its
+heading/labels actually start (content.css blocks all use `padding: 4vh
+3vw` or similar) — real empty space, not text. The drone-overlap check's
+existing `rects` array (whole padded content-block) is the right proxy for
+"is the drone silhouette under the content column," but is too coarse for
+"does this line cross rendered text" — switched the leader-line check
+specifically to `.teardown-header` (shared markup across every content
+variant) + visible rows/labels, which is what the brief's own wording
+("heading, sub, row") actually asked for. Confirmed the known mobile
+t≈0.30 failure fails this refined check too (4 real hits against
+`teardown-header`) before fixing anything.
+Fix: `callouts.js`/`projectCallouts.js`'s elbow routing now keeps the
+vertical run outside the docked content BLOCK's own span (not just the
+narrower label's, which sits inset within it — margining off the label's
+edge alone measurably wasn't enough, still crossed the block's own
+padding). Verified clean (0 hits) across t=0.13-0.70 at 0.02 resolution,
+both viewports, and via the full 51-step gate at all 4 drift phases.
+
+**Step 4 gate result:** build 154.90 kB gz. `npm run verify`: PASS. Full
+gate at drift phases 0/0.25/0.5/0.75, both viewports: identical result
+every time — 0 overlap, 0 empty, 0 leader-line-overlap, 0 blurb-guard, and
+exactly the same 6 pre-existing mobile overflow failures already documented
+in the 2026-07-22/23 entries below (teardown-block 349-357px vs. 346px,
+inspection-block 351px vs. 346px) — unchanged in location and magnitude,
+confirming nothing in this pass touched that pre-existing gap.
+
+**Measured cost of tier=HIGH pinning (2.0), so a future pass can budget for
+it rather than be surprised by it.** A full 51-step x 2-viewport gate run,
+timed wall-clock, same machine, back-to-back: `CAPTURE_TIER=LOW` 171s,
+`CAPTURE_TIER=HIGH` 495s — **~2.9x**, not the ~4x this pass initially
+assumed going in; corrected against the actual measurement rather than left
+as a guess. The end-to-end ratio is smaller than the raw rendering-cost
+difference because a lot of each gate step's wall-clock budget is
+tier-independent fixed cost (the `waitForT` poll, the 400ms settle pad, the
+blurb-guard poll). Isolating just the scroll+settle step itself (a 101-step
+probe, fresh `chromium.launch()` per tier, no other gate overhead) showed a
+much starker gap: ~424ms real time per step on desktop at tier=HIGH
+against a nominal 40ms wait (~10.6x inflation) vs. ~67ms per step at
+tier=LOW (~1.7x inflation) — tier=HIGH's real bloom/vignette/grain/tonemap
+shader work dominates the step cost, the scripted 40ms pacing is nearly
+irrelevant next to it. Budget gate/shots/recording runs at tier=HIGH as a
+multi-minute-per-viewport cost, not the faster tier=LOW timing this repo's
+history was implicitly tuned against before 2.0.
+
+**Why the Step 4 desktop recording is ~20MB against ~5.5MB for mobile** —
+not just the ~3.9x pixel-count difference (1440x900 vs 390x844) it might
+look like at a glance. The recording script's `SCROLL_DURATION_MS=7000`
+(x2 directions) is a scripted *pacing* target, not a guarantee — per the
+per-step probe above, real wall-clock time per scroll step at tier=HIGH
+runs several times the nominal 40ms wait, so both recordings' actual
+runtime is dominated by real rendering cost, not the intended ~14s-per-
+direction pacing. The two recordings share one `chromium.launch()`
+(desktop recorded first, then mobile in the same already-warmed-up
+browser/context), so desktop alone absorbs the one-time shader-compile/
+JIT warm-up cost the isolated per-tier probe pays fresh each time — this is
+why the observed file-size ratio (~3.66x) tracks close to the pure pixel-
+count ratio (~3.94x) rather than compounding with a much larger duration
+difference: the fixed warm-up cost is real but is a one-time cost paid
+once per session, not per recording. If a future pass re-runs this and
+wants tighter, comparable durations for both recordings, launch a fresh
+browser per recording (trading a slower total run for isolating each one's
+own warm-up cost) rather than sharing one across viewports.
+
 ## 2026-07-24 — v1.2.1 determinism: seeded RNG, latch bugs, capture-freeze scope, AA floor
 
 **Unseeded-RNG skyline trap.** environment.js's createHorizon() called
