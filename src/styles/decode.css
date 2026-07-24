@@ -1,0 +1,60 @@
+/* v1.2 #B: reveal primitives for src/hud/decode.js. All three reveal types
+   (scramble, type-on, body-stagger) write plain text/opacity/transform via
+   inline styles or textContent — this file only owns the two things that
+   are cleaner as real CSS: the caret blink keyframe and the body-line
+   hidden/revealed transition. */
+
+.decode-caret {
+  display: inline-block;
+  width: 0.55em;
+  margin-left: 1px;
+  background: currentColor;
+  animation: decode-caret-blink 300ms steps(1) 2;
+}
+@keyframes decode-caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.decode-word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(12px);
+  filter: blur(1px);
+  transition:
+    opacity 300ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.decode-word.decode-word-in {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decode-caret {
+    animation: none;
+    display: none;
+  }
+  .decode-word {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+}
+
+/* v1.2.1 Step 3c: pin the caret blink to a fixed frame under capture, same
+   reasoning as hud.css's hud-blink override -- a delay this far negative
+   against a 2-iteration 300ms animation lands past its end regardless of
+   when the freeze attribute actually gets applied. */
+html[data-capture-freeze] .decode-caret {
+  animation-play-state: paused;
+  animation-delay: -99999s;
+}

@@ -8,6 +8,7 @@
 import { Vector3 } from 'three';
 import '../styles/callouts.css';
 import { skills } from '../content/data.js';
+import { decodeHeading, decodeBody } from './decode.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const BAND_START = 0.13; // P2.6: takeoff beat shortened 0.16->0.13
@@ -46,7 +47,7 @@ export function createCallouts({ camera, drone, mountEl }) {
     `;
     mountEl.appendChild(label);
 
-    return { skill, path, dot, label };
+    return { skill, path, dot, label, h3: label.querySelector('h3'), p: label.querySelector('p'), wasVisible: false };
   });
 
   const worldPos = new Vector3();
@@ -56,6 +57,11 @@ export function createCallouts({ camera, drone, mountEl }) {
     item.label.classList.remove('visible', 'active');
     item.path.style.opacity = '0';
     item.dot.style.opacity = '0';
+    // v1.2 #B: label's own opacity/transform/max-height transition
+    // (callouts.css) already provides the "opacity out, no scramble"
+    // deactivation for the text inside it — just reset the activation
+    // edge so a later re-reveal decodes in again instead of staying inert.
+    item.wasVisible = false;
   }
 
   function update(state) {
@@ -87,6 +93,13 @@ export function createCallouts({ camera, drone, mountEl }) {
       if (offscreen) return hide(item);
 
       const active = i === bandIndex;
+      // v1.2 #B: decode in once per activation (the false->true edge),
+      // never re-triggered while the item just sits in its visible window.
+      if (!item.wasVisible) {
+        decodeHeading(item.h3, item.skill.title);
+        decodeBody(item.p);
+      }
+      item.wasVisible = true;
       item.label.classList.add('visible');
       item.label.classList.toggle('active', active);
 
