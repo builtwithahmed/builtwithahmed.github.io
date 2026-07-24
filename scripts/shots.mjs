@@ -7,7 +7,16 @@ import { mkdir } from 'node:fs/promises';
 // ?debug attaches window.__debugT (main.js) so this can poll for real
 // convergence instead of guessing a wall-clock delay — see the note by
 // waitForT below. It attaches no visible UI, so screenshots are unaffected.
-const url = (process.env.VERIFY_URL || 'http://localhost:4173/') + '?debug';
+//
+// v1.3 Step 2.0: headless Chromium's WebGL context is SwiftShader (software),
+// which scene/tier.js's renderer blacklist self-reports as tier: LOW -- and
+// LOW makes post.js skip the whole composer (bloom/vignette/grain), so an
+// unpinned run of this script was silently shooting the no-bloom/no-vignette
+// path, not what a real desktop visitor's GPU renders. Pin tier explicitly;
+// defaults to HIGH, override with CAPTURE_TIER=LOW/MED to shoot that path
+// on purpose (e.g. a hero comparison across tiers).
+const CAPTURE_TIER = process.env.CAPTURE_TIER || 'HIGH';
+const url = (process.env.VERIFY_URL || 'http://localhost:4173/') + `?debug&tier=${CAPTURE_TIER}`;
 const OUT_DIR = 'shots';
 const VIEWPORTS = [
   { name: '1440x900', width: 1440, height: 900 },
@@ -29,6 +38,7 @@ try {
 }
 
 await mkdir(OUT_DIR, { recursive: true });
+console.log(`render tier: ${CAPTURE_TIER} (pinned)`);
 
 const browser = await chromium.launch();
 

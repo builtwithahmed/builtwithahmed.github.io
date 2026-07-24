@@ -34,7 +34,15 @@
 //     than 700ms after first observed, at any T step.
 import { chromium } from 'playwright';
 
-const url = (process.env.VERIFY_URL || 'http://localhost:4173/') + '?debug';
+// v1.3 Step 2.0: headless Chromium's WebGL context is SwiftShader (software),
+// which scene/tier.js's renderer blacklist self-reports as tier: LOW -- and
+// LOW makes post.js skip the whole composer (bloom/vignette/grain), silently,
+// with no warning in this gate's own output. Every capture path now pins an
+// explicit tier via ?tier= instead of leaving that to accident. Defaults to
+// HIGH (what a real desktop visitor's GPU gets); override with
+// CAPTURE_TIER=LOW/MED to deliberately exercise that path instead.
+const CAPTURE_TIER = process.env.CAPTURE_TIER || 'HIGH';
+const url = (process.env.VERIFY_URL || 'http://localhost:4173/') + `?debug&tier=${CAPTURE_TIER}`;
 const VIEWPORTS = [
   { name: '1440x900', width: 1440, height: 900 },
   { name: '390x844', width: 390, height: 844 },
@@ -101,6 +109,7 @@ try {
 }
 
 console.log(DRIFT_PHASE !== null ? `drift phase: pinned p=${DRIFT_PHASE}` : 'drift phase: live (unpinned)');
+console.log(`render tier: ${CAPTURE_TIER} (pinned)`);
 
 const browser = await chromium.launch();
 let totalFailures = 0;

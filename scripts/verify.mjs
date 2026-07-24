@@ -2,7 +2,15 @@
 // requests, zero console errors, WebGL context active on #scene.
 import { chromium } from 'playwright';
 
-const url = process.env.VERIFY_URL || 'http://localhost:4173/';
+// v1.3 Step 2.0: headless Chromium's WebGL context is SwiftShader (software),
+// which scene/tier.js's renderer blacklist self-reports as tier: LOW -- and
+// LOW makes post.js skip the whole composer entirely, so an unpinned run
+// never exercises the composer's own shader compilation (a real source of
+// console errors a LOW run would silently miss). Pin tier explicitly;
+// defaults to HIGH, override with CAPTURE_TIER=LOW/MED to verify that path
+// on purpose.
+const CAPTURE_TIER = process.env.CAPTURE_TIER || 'HIGH';
+const url = (process.env.VERIFY_URL || 'http://localhost:4173/') + `?tier=${CAPTURE_TIER}`;
 
 try {
   await fetch(url, { signal: AbortSignal.timeout(2000) });
@@ -50,6 +58,7 @@ const canvasInfo = await page.evaluate(() => {
 });
 
 console.log('--- PAGE LOAD ---');
+console.log('render tier:', `${CAPTURE_TIER} (pinned)`);
 console.log('status:', response.status());
 console.log('title:', title);
 console.log('script tags:', scriptSrcs);
