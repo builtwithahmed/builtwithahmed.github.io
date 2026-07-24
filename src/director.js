@@ -7,6 +7,8 @@
 // tuned for this world scale, per instruction. `focus` is new: each
 // keyframe is tagged with the §5 act it falls in, so the side flips at
 // keyframe boundaries rather than interpolating (L/R/C is categorical).
+import { CatmullRomCurve3, Vector3 } from 'three';
+
 const KEYFRAMES = [
   // Amendment D-a: cam pulled in from z=8.5 to ~30-35% frame width (was
   // ~11-14%) — moved the camera closer rather than scaling the model, per
@@ -124,12 +126,37 @@ const MODES = [
   [1.01, 'LAND', 'WPT 6/6 · PAD-B'],
 ];
 
+// v1.2 #A: per-segment smoothstep-lerp made velocity hit exactly zero at
+// every keyframe (smoothstep's derivative is 0 at both ends of its [0,1]
+// domain, and that domain WAS one segment) — the literal cause of HUD SPD
+// reading 0.0 in every capture. Replaced with one continuous
+// CatmullRomCurve3 per channel (cam/look/drone), built from every
+// keyframe's position in order. 'centripetal' (three.js's own default,
+// passed explicitly here) avoids the loop/cusp overshoot a uniform
+// Catmull-Rom can produce when consecutive segments have very different
+// lengths — several of this rig's segments do (t=0.20->0.22 is 0.02 wide,
+// t=0.46->0.60 is 0.14 wide).
+//
+// The curve's own `getPoint(u)` parameterizes `u` UNIFORMLY by control-
+// point index (three.js: `p = (points.length-1)*u`), not by each
+// keyframe's real `t` — sampling it with raw T directly would silently
+// discard this rig's entire hand-tuned pacing (teardown lingering,
+// mission-map cruising, etc. all encoded in KEYFRAMES' uneven t-gaps) in
+// favour of uniform per-keyframe timing. sampleKeyframes below still does
+// its own t-bracket search and remaps into the curve's index-uniform u
+// space (`uCurve`) from the REAL uRaw fraction, so real timing is
+// preserved and the curve only supplies SHAPE — a spline that happens to
+// pass through the exact same points at the exact same T values the old
+// lerp did, just continuously instead of stopping at each one.
+const camCurve = new CatmullRomCurve3(KEYFRAMES.map((k) => new Vector3(...k.cam)), false, 'centripetal');
+const lookCurve = new CatmullRomCurve3(KEYFRAMES.map((k) => new Vector3(...k.look)), false, 'centripetal');
+const droneCurve = new CatmullRomCurve3(KEYFRAMES.map((k) => new Vector3(...k.drone)), false, 'centripetal');
+const camPoint = new Vector3();
+const lookPoint = new Vector3();
+const dronePoint = new Vector3();
+
 function smoothstep(u) {
   return u * u * (3 - 2 * u);
-}
-
-function lerp3(a, b, u) {
-  return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
 }
 
 function sampleKeyframes(t) {
@@ -138,6 +165,11 @@ function sampleKeyframes(t) {
   const a = KEYFRAMES[i];
   const b = KEYFRAMES[i + 1];
   const uRaw = (t - a.t) / (b.t - a.t);
+  // Position sampling below uses uRaw directly (not smoothstepped) — see
+  // the comment above the curves. u (smoothstepped) is kept only for the
+  // scalar mobileGap/mobileLook blends, which weren't part of the
+  // stop-start bug and aren't part of this change (still per-segment
+  // linear-ish blends between two scalars, not points on a spline).
   const u = smoothstep(uRaw);
   const gapA = a.mobileGap ?? LATERAL_SCALE_MOBILE;
   const gapB = b.mobileGap ?? LATERAL_SCALE_MOBILE;
@@ -150,10 +182,17 @@ function sampleKeyframes(t) {
     mobileLookA !== null || mobileLookB !== null
       ? (mobileLookA ?? a.look[0]) + ((mobileLookB ?? b.look[0]) - (mobileLookA ?? a.look[0])) * u
       : null;
+  // Remap [segment index i, local fraction uRaw] into the curve's own
+  // uniform-per-point parameter space — matches CatmullRomCurve3.getPoint's
+  // internal `p = (points.length-1)*u` exactly, so uCurve = i+uRaw here
+  // lands on precisely the same p. At uRaw = 0 or 1 this returns exactly
+  // control point i or i+1 (the keyframe's own literal values), same as
+  // the old lerp did at its segment boundaries.
+  const uCurve = (i + uRaw) / (KEYFRAMES.length - 1);
   return {
-    cam: lerp3(a.cam, b.cam, u),
-    look: lerp3(a.look, b.look, u),
-    drone: lerp3(a.drone, b.drone, u),
+    cam: camCurve.getPoint(uCurve, camPoint).toArray(),
+    look: lookCurve.getPoint(uCurve, lookPoint).toArray(),
+    drone: droneCurve.getPoint(uCurve, dronePoint).toArray(),
     mobileGap: gapA + (gapB - gapA) * u,
     mobileLook,
     // T approaches any target asymptotically from below and never exactly
