@@ -139,11 +139,33 @@ function createFresnelMaterial() {
   });
 }
 
+// v1.2.1 Step 3a: Math.random() can't be seeded, which is why this skyline
+// (unlike every other object in the scene, all built from fixed constants)
+// regenerated a completely different layout on every page load -- see
+// NOTES.md's reproducibility diagnosis. mulberry32 is a small deterministic
+// PRNG; seeding it with a constant reproduces the same scattered layout
+// every load while keeping the hand-off "random placement" look.
+function mulberry32(seed) {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// v1.2.1 Step 3b: Ahmed's pick from the seed1/seed2/seed3 candidate renders.
+// Provisional pending the Step 6 full capture set -- re-pick if any frame
+// composes badly with this skyline, not treated as immutable.
+const HORIZON_SEED = 2;
+
 // 10-14 dark industrial silhouettes at |x| 14-34 with amber/red rooftop
 // beacons (§6.1), spread along the flight corridor so the takeoff/teardown
 // beats have a horizon instead of reading as a void.
 export function createHorizon() {
   const group = new Group();
+  const rand = mulberry32(HORIZON_SEED);
   const bodyMat = createFresnelMaterial();
   const amberMat = new MeshStandardMaterial({ color: 0xffb03a, emissive: 0xffb03a, emissiveIntensity: 1.8 });
   const redMat = new MeshStandardMaterial({ color: 0xff5449, emissive: 0xff5449, emissiveIntensity: 1.8 });
@@ -151,18 +173,18 @@ export function createHorizon() {
   const count = 14;
   for (let i = 0; i < count; i++) {
     const side = i % 2 ? 1 : -1;
-    const x = side * (14 + Math.random() * 20);
-    const z = 5 - Math.random() * 65;
-    const h = 3 + Math.random() * 9;
-    const w = 1.5 + Math.random() * 2.5;
-    const d = 1.5 + Math.random() * 2.5;
+    const x = side * (14 + rand() * 20);
+    const z = 5 - rand() * 65;
+    const h = 3 + rand() * 9;
+    const w = 1.5 + rand() * 2.5;
+    const d = 1.5 + rand() * 2.5;
 
     const sil = new Mesh(new BoxGeometry(w, h, d), bodyMat);
     sil.position.set(x, h / 2, z);
     group.add(sil);
 
-    if (Math.random() > 0.4) {
-      const beacon = new Mesh(new SphereGeometry(0.09, 6, 6), Math.random() > 0.5 ? amberMat : redMat);
+    if (rand() > 0.4) {
+      const beacon = new Mesh(new SphereGeometry(0.09, 6, 6), rand() > 0.5 ? amberMat : redMat);
       beacon.position.set(x, h + 0.2, z);
       group.add(beacon);
     }

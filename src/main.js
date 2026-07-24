@@ -91,6 +91,26 @@ const camLook = new Vector3(...director.state.look);
 const camTarget = new Vector3();
 const lookTarget = new Vector3();
 
+// v1.2.1: camera drift (below) is wall-clock driven, so two captures at the
+// same T can render different drift offsets depending on how much real time
+// elapsed to reach that T. null = live (production behavior); a gate/test
+// run can pin it to a fixed phase via __setDriftPhase for reproducible
+// captures. Only reachable behind ?debug (see bottom of file) — production
+// always sees null and drifts on wall-clock time as before.
+let driftPhaseOverride = null;
+
+// v1.2.1 Step 3c: beyond camera drift, several other effects are wall-clock
+// `time`-driven rather than T-driven -- rotor spin (drone.js) is an
+// unbounded accumulator (`+= dt`) integrated since page load, and the drone
+// hover bob / tower scan+beacon+defects / mission-map's active-waypoint
+// pulse are all `Math.sin(time * f)` with no T gate holding them still.
+// None of that is visible to a DOM/NDC-based gate check, but it all shows
+// up in a raw screenshot, so it has to freeze too for a byte-identity
+// proof. Same explicit opt-in pattern as driftPhaseOverride: false in
+// production and in ordinary ?debug sessions, true only when a capture
+// script asks for it.
+let captureFreeze = false;
+
 function tick() {
   requestAnimationFrame(tick);
   timer.update();
@@ -101,10 +121,10 @@ function tick() {
   const flying = state.T < 0.985;
 
   drone.explode(state.explode, state.explodeScale, activeComponentKey(state.T));
-  drone.update(dt, state.dronePos, { time, reducedMotion: state.reducedMotion, flying });
+  drone.update(dt, state.dronePos, { time, reducedMotion: state.reducedMotion, flying, captureFreeze });
   dustRing.update(state.T, state.reducedMotion);
-  map.update(state.T, time, state.reducedMotion);
-  tower.update(time, state.reducedMotion);
+  map.update(state.T, time, state.reducedMotion, captureFreeze);
+  tower.update(time, state.reducedMotion, captureFreeze);
 
   const damp = state.reducedMotion ? 1 : 1 - Math.exp(-4.2 * dt);
   camTarget.set(...state.cam);
@@ -112,6 +132,25 @@ function tick() {
   camPos.lerp(camTarget, state.reducedMotion ? 1 : damp);
   camLook.lerp(lookTarget, state.reducedMotion ? 1 : damp);
   camera.position.copy(camPos);
+  // v1.2 #A: subtle constant drift so a held frame doesn't read as a freeze-
+  // frame — applied to the rendered position only, never written back into
+  // camPos (the persistent damped state), so it can't accumulate/compound
+  // across frames or drag the "real" camera trajectory off course. Three
+  // different frequencies/phases per axis so it doesn't read as a circular
+  // orbit. lookAt runs after, so orientation naturally follows the drifted
+  // position toward the stable look target (a gentle handheld parallax,
+  // not a shaky look-at wobble).
+  if (!state.reducedMotion) {
+    // p in [0,1) maps onto one full turn (2*PI) of the shared time input to
+    // all three sin() terms below — each axis keeps its own frequency/phase
+    // offset (so a pinned phase still looks like the same handheld drift,
+    // just held still), only the wall-clock `time` driving them is replaced
+    // by a constant.
+    const driftTime = driftPhaseOverride !== null ? driftPhaseOverride * (2 * Math.PI) : time;
+    camera.position.x += Math.sin(driftTime * 0.31) * 0.05;
+    camera.position.y += Math.sin(driftTime * 0.23 + 1.7) * 0.05;
+    camera.position.z += Math.sin(driftTime * 0.17 + 3.1) * 0.05;
+  }
   camera.lookAt(camLook);
   fillLight.position.copy(camera.position);
   fillLight.target.position.copy(camLook);
@@ -162,6 +201,26 @@ if (new URLSearchParams(location.search).has('debug')) {
   };
   window.__debugSetComposer = (enabled) => {
     post.setEnabled?.(enabled);
+  };
+
+  // v1.2.1 Step 2: freezes the camera drift (above) at a fixed phase so gate
+  // captures are reproducible regardless of how long the page took to settle
+  // to a given T. Test-only by construction — lives inside this ?debug guard
+  // alongside every other debug global, so production never sees it.
+  window.__setDriftPhase = (p) => {
+    driftPhaseOverride = p;
+  };
+
+  // v1.2.1 Step 3c: freezes every other wall-clock-driven effect (rotor
+  // spin, drone bob, tower scan/beacon/defects, map waypoint pulse, plus
+  // the CSS animations/transitions gated on the data-capture-freeze
+  // attribute this sets -- see hud.css/decode.css/tokens.css) for a
+  // byte-identical capture. Independent of __setDriftPhase on purpose: a
+  // capture script composes the two explicitly rather than one implying
+  // the other.
+  window.__setCaptureFreeze = (enabled) => {
+    captureFreeze = !!enabled;
+    document.documentElement.toggleAttribute('data-capture-freeze', captureFreeze);
   };
 
   // Cheap enough to poll at high frequency — gate scripts use this to wait

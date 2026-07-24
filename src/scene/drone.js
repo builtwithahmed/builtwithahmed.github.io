@@ -269,7 +269,7 @@ export function createDrone() {
   // Flight behaviour driven by the director's sampled target position.
   // `flying` is false once T is in the final landing settle (T >= 0.985),
   // matching v1's landed-state spin/bob cutoff.
-  function update(dt, targetPos, { time, reducedMotion, flying }) {
+  function update(dt, targetPos, { time, reducedMotion, flying, captureFreeze }) {
     const damp = reducedMotion ? 1 : 1 - Math.exp(-4.2 * dt);
 
     prevPos.copy(drone.position);
@@ -285,24 +285,45 @@ export function createDrone() {
     // reading as fastest.
     const speed = Math.sqrt(vx * vx + vy * vy + vz * vz) / Math.max(dt, 1e-4);
 
-    if (speed > 0.15) {
-      const yaw = Math.atan2(vx, vz);
-      let dy = yaw - drone.rotation.y;
-      while (dy > Math.PI) dy -= Math.PI * 2;
-      while (dy < -Math.PI) dy += Math.PI * 2;
-      drone.rotation.y += dy * damp * 2;
+    // v1.2.1 Step 3c: the yaw response below only runs `if (speed > 0.15)` —
+    // once a settled drone's speed drops under that threshold it's a LATCH,
+    // not a convergence: rotation.y simply stops being touched and holds
+    // whatever value it last had. That value depends on exactly which frame
+    // crossed the threshold, which depends on the session's real dt
+    // sequence — unlike drone.position (a plain lerp toward a fixed target,
+    // which does converge to bit-identical given enough settle time), this
+    // never converges no matter how long you wait. captureFreeze forces a
+    // fixed, deterministic resting pose instead of trusting the latch.
+    if (captureFreeze) {
+      drone.rotation.set(0, 0, 0);
+    } else {
+      if (speed > 0.15) {
+        const yaw = Math.atan2(vx, vz);
+        let dy = yaw - drone.rotation.y;
+        while (dy > Math.PI) dy -= Math.PI * 2;
+        while (dy < -Math.PI) dy += Math.PI * 2;
+        drone.rotation.y += dy * damp * 2;
+      }
+      drone.rotation.z += (-vx * 0.6 - drone.rotation.z) * damp * 2;
+      drone.rotation.x += (Math.min(speed * 0.05, 0.28) * (vz < 0 ? 1 : -1) - drone.rotation.x) * damp * 2;
     }
-    drone.rotation.z += (-vx * 0.6 - drone.rotation.z) * damp * 2;
-    drone.rotation.x += (Math.min(speed * 0.05, 0.28) * (vz < 0 ? 1 : -1) - drone.rotation.x) * damp * 2;
 
-    if (!reducedMotion && speed < 0.6 && flying) {
+    if (!reducedMotion && !captureFreeze && speed < 0.6 && flying) {
       drone.position.y += Math.sin(time * 2.1) * 0.05 * (1 - Math.min(speed, 1));
     }
 
     const spin = reducedMotion ? 2 : flying ? 16 + speed * 4 : 3;
-    rotorHubs.forEach((hub, i) => {
-      hub.rotation.y += dt * spin * (i % 2 ? 1 : -1);
-    });
+    // v1.2.1 Step 3c: unlike everything else here, this is an accumulator
+    // (+=), not a function of the current dt/time — it integrates every
+    // frame's dt since page load, so two sessions that took different real
+    // wall-clock time to settle land on a different angle even at the same
+    // T. Skipping the increment under captureFreeze holds it at whatever
+    // angle it already had (0, since nothing else ever sets it).
+    if (!captureFreeze) {
+      rotorHubs.forEach((hub, i) => {
+        hub.rotation.y += dt * spin * (i % 2 ? 1 : -1);
+      });
+    }
     // Amendment E: "motion blur" via lower disc opacity as spin ramps up —
     // reads as the blades thinning into a faster blur, not literal blur.
     const discOpacity = reducedMotion ? 0.1 : Math.max(0.025, 0.12 - spin * 0.0035);

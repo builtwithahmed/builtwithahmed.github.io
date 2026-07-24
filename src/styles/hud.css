@@ -75,6 +75,15 @@
   .hud-rec i { animation: none; }
 }
 
+/* v1.2.1 Step 3c: this loops on wall-clock time forever, so two fresh
+   sessions at the same T can land on opposite blink states -- pin it to a
+   fixed frame under capture (main.js's __setCaptureFreeze). The delay just
+   needs to be a fixed constant, not any particular value -- see main.js. */
+html[data-capture-freeze] .hud-rec i {
+  animation-play-state: paused;
+  animation-delay: -99999s;
+}
+
 @media (max-width: 760px) {
   .hud-tele, .hud-mode, .hud-rec, .hud-corner { display: none; }
 }

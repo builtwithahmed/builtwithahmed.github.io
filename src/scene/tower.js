@@ -70,12 +70,22 @@ export function createTower(x = -4.2, z = -44) {
 
   group.position.set(x, 0, z);
 
-  function update(time, reducedMotion) {
-    if (reducedMotion) {
+  function update(time, reducedMotion, captureFreeze) {
+    if (reducedMotion || captureFreeze) {
       // §Motion tokens: no ambient animation under reduced motion. Scan
       // ring and beacon hold a static mid-column reading position instead
       // of looping; defects hold their lit state rather than blinking.
+      // v1.2.1 Step 3c: captureFreeze takes this same static branch --
+      // scanY/beacon/defect glow are all wall-clock `time`-driven with no
+      // T gate, so this holds regardless of how long the session ran.
       scanRing.position.y = (SCAN_MIN_Y + SCAN_MAX_Y) / 2;
+      // This was a pre-existing gap even under plain reducedMotion (never
+      // caught before, since a slightly-stale opacity from whatever the
+      // ring's last active-branch frame left it at is imperceptible in
+      // production) -- but it's exactly the drone-yaw latch pattern: never
+      // reassigned here, so it holds whatever value the brief unfrozen
+      // startup window happened to leave it at, which differs per session.
+      scanMat.opacity = 0.85;
       beaconMat.emissiveIntensity = 1.0;
       defects.forEach((d) => {
         d.mat.emissiveIntensity = 1.1;

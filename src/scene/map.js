@@ -89,7 +89,7 @@ export function createMap() {
     return mesh;
   });
 
-  function update(T, time, reducedMotion) {
+  function update(T, time, reducedMotion, captureFreeze) {
     const progress = smoothstep((T - ACT_START) / (ACT_END - ACT_START));
     const drawCount = Math.round(progress * PATH_N);
     pathLine.geometry.setDrawRange(0, drawCount);
@@ -110,9 +110,14 @@ export function createMap() {
       wp.mat.color.set(reached ? 0x3ddc84 : 0xffb03a);
       wp.mat.emissive.set(reached ? 0x3ddc84 : 0xffb03a);
       const isActive = !reached && (i === 0 || T >= waypoints[i - 1].reachT);
-      const pulse = !reducedMotion && isActive ? 1 + Math.sin(time * 4) * 0.15 : 1;
+      // v1.2.1 Step 3c: waypoint 0 reads isActive from page load (reachT
+      // only gates the OTHERS relative to it), so this sin(time) pulse was
+      // running -- and capture-time-variable -- even outside the map act;
+      // captureFreeze holds the resting (non-pulsing) values instead.
+      const pulsing = !reducedMotion && !captureFreeze && isActive;
+      const pulse = pulsing ? 1 + Math.sin(time * 4) * 0.15 : 1;
       wp.mesh.scale.setScalar(pulse);
-      wp.mat.emissiveIntensity = !reducedMotion && isActive ? 1.1 + Math.sin(time * 4) * 0.4 : 0.9;
+      wp.mat.emissiveIntensity = pulsing ? 1.1 + Math.sin(time * 4) * 0.4 : 0.9;
     });
   }
 
