@@ -6,7 +6,12 @@
 //     component's actual screen position and checks it doesn't fall
 //     inside any visible content rect, rather than an axis-aligned-box
 //     test (which inflates during banking/rotation and produces false
-//     positives — see NOTES.md 2026-07-19/20).
+//     positives — see NOTES.md 2026-07-19/20). v1.4 Step 2: also checks
+//     every OTHER component's point against each visible `.nameplate`
+//     rect (a component's own nameplate is excluded — it's anchored
+//     directly on that point by construction, not a collision) — catches
+//     both a nameplate sitting under a different exploded part and, as a
+//     byproduct, two nameplates visually colliding with each other.
 //  2. Anti-emptiness — at every T, at least one of {content-block,
 //     callout-label, console-row, phase-readout, .blurb} must be on
 //     screen, so a beat-boundary gap can never ship as a literal empty
@@ -46,6 +51,11 @@
 //     `path.dataset.targetLabel`, so the one rect a line is SUPPOSED to
 //     enter isn't a false positive) — same point-sampled methodology as
 //     the drone check, applied to line geometry instead of a single point.
+//     v1.4 Step 2: `.nameplate` rects join this same check as new
+//     surfaces a leader line must not cross — excluded via a parallel
+//     `path.dataset.sourceComponent` (a line's own component's nameplate
+//     sits at that line's very first sample point, so without this every
+//     line would false-positive against its own tag).
 import { chromium } from 'playwright';
 
 // v1.3 Step 2.0: headless Chromium's WebGL context is SwiftShader (software),
@@ -170,6 +180,17 @@ for (const vp of VIEWPORTS) {
         rects.push(el.getBoundingClientRect());
       });
 
+      // v1.4 Step 2: nameplates are a new on-screen surface — checked the
+      // same point-in-rect way as `rects` above, but kept in a separate
+      // array (not merged into `rects`) because a nameplate's own owning
+      // component must be excluded from hitting ITS OWN rect (see the
+      // exclusion in the loop below), the same self-exclusion shape check
+      // 5 already uses for targetLabel/ownLabel.
+      const nameplateRects = [];
+      document.querySelectorAll('.nameplate.visible').forEach((el) => {
+        nameplateRects.push({ component: el.dataset.component, rect: el.getBoundingClientRect() });
+      });
+
       const overlaps = [];
       for (const [key, p] of Object.entries(ndc.components)) {
         if (p.z > 1) continue; // behind camera
@@ -178,6 +199,19 @@ for (const vp of VIEWPORTS) {
           if (r.width === 0 || r.height === 0) continue;
           if (px.x >= r.left && px.x <= r.right && px.y >= r.top && px.y <= r.bottom) {
             overlaps.push({ component: key, rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom }, px });
+          }
+        }
+        for (const entry of nameplateRects) {
+          if (entry.component === key) continue; // a component's own nameplate, not a collision
+          const r = entry.rect;
+          if (r.width === 0 || r.height === 0) continue;
+          if (px.x >= r.left && px.x <= r.right && px.y >= r.top && px.y <= r.bottom) {
+            overlaps.push({
+              component: key,
+              rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom },
+              px,
+              nameplateOwner: entry.component,
+            });
           }
         }
       }
@@ -214,6 +248,13 @@ for (const vp of VIEWPORTS) {
       document.querySelectorAll('.callout-label.visible, .console-row.visible').forEach((el) => {
         leaderLineRects.push({ el, rect: el.getBoundingClientRect() });
       });
+      // v1.4 Step 2: nameplates join this check as new surfaces too — a
+      // skill callout's line must not cross a DIFFERENT component's tag en
+      // route to its dock label. `component` is recorded so a line can
+      // exclude its own component's nameplate below (see ownComponent).
+      document.querySelectorAll('.nameplate.visible').forEach((el) => {
+        leaderLineRects.push({ el, rect: el.getBoundingClientRect(), component: el.dataset.component });
+      });
 
       const SAMPLES_PER_SEGMENT = 12;
       const leaderLineHits = [];
@@ -227,6 +268,12 @@ for (const vp of VIEWPORTS) {
         for (let i = 0; i < nums.length; i += 2) pts.push({ x: nums[i], y: nums[i + 1] });
 
         const ownLabel = document.getElementById(path.dataset.targetLabel || '');
+        // v1.4 Step 2: a line's own nameplate sits at that line's very
+        // first sample point (M sx sy, the dot's own position) — without
+        // this exclusion every visible line would false-positive against
+        // its own tag. projectCallouts.js's lines never set this dataset
+        // key, so ownComponent is '' there and never matches a real key.
+        const ownComponent = path.dataset.sourceComponent || '';
         const hits = [];
         for (let s = 0; s < pts.length - 1; s++) {
           const a = pts[s];
@@ -236,6 +283,7 @@ for (const vp of VIEWPORTS) {
             const px = { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
             for (const entry of leaderLineRects) {
               if (entry.el === ownLabel) continue; // legitimate destination
+              if (entry.component && entry.component === ownComponent) continue; // own nameplate
               const r = entry.rect;
               if (r.width === 0 || r.height === 0) continue;
               if (px.x >= r.left && px.x <= r.right && px.y >= r.top && px.y <= r.bottom) {

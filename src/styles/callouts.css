@@ -122,11 +122,50 @@
   background: rgba(255, 176, 58, 0.08);
 }
 
+/* v1.4 Step 1b: diegetic hardware tags, anchored every frame to each
+   exploded component's own projected position (callouts.js) — 3D-half
+   furniture, not content-dock text. Deliberately doesn't reuse
+   .callout-label's visibility/max-height recipe: that recipe solves
+   flex-stack collapse + nested-scroll prevention for items sharing a
+   column, neither of which applies to a lone position:fixed element with
+   no siblings in flow. Dim-by-default/full-bright-when-active mirrors
+   .callout-label's own opacity mechanism instead — color has nowhere
+   "up" to shift to here (nameplates are amber at every state, unlike the
+   dot/line's cyan->amber switch), so opacity is the only lever. */
+.nameplate {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+  font-family: var(--font-hud);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--warn);
+  text-shadow: 0 0 6px rgba(255, 176, 58, 0.25);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 250ms cubic-bezier(0.16, 1, 0.3, 1), text-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nameplate.visible { opacity: 0.5; }
+.nameplate.visible.active {
+  opacity: 1;
+  text-shadow: 0 0 10px rgba(255, 176, 58, 0.55);
+}
+
+@media (max-width: 759px) {
+  .nameplate { font-size: 9px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .callout-label,
   .callout-label .tags,
   .callout-line,
-  .callout-dot {
+  .callout-dot,
+  .nameplate {
     transition: none;
   }
 }

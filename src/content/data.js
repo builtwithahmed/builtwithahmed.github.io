@@ -141,18 +141,27 @@ export const contact = [
 export const skills = [
   {
     componentKey: 'flightController',
+    // v1.4 Step 1b: diegetic hardware tag (nameplates, callouts.js) — the
+    // physical part label, distinct from `title`'s skill-mapping shown in
+    // the dock. nameplateShort is the mobile-only abbreviation (390px);
+    // omitted on entries short enough to need none.
+    nameplate: 'FLIGHT CONTROLLER',
+    nameplateShort: 'FC',
     title: 'Drone Systems & ArduPilot',
     blurb: 'ArduPilot firmware, MAVLink protocol, .BIN log analysis, flight controller configuration.',
     tags: ['ArduPilot', 'MAVLink', 'PX4', 'Mission Planner'],
   },
   {
     componentKey: 'gimbal',
+    nameplate: 'GIMBAL',
     title: 'Data & Log Analysis',
     blurb: 'Telemetry parsing, flight data extraction, analysis pipelines, Sheets automation.',
     tags: ['.BIN parsing', 'Telemetry', 'Pipelines'],
   },
   {
     componentKey: 'escArms',
+    nameplate: 'ESC ARMS',
+    nameplateShort: 'ESC',
     title: 'Python Automation',
     // v1 #services row (exact title match), not the #skills "Python & FastAPI" row.
     blurb: 'Process automation, data pipelines, Google Sheets scripts, web scrapers.',
@@ -160,6 +169,7 @@ export const skills = [
   },
   {
     componentKey: 'antenna',
+    nameplate: 'ANTENNA',
     title: 'APIs & Cloud',
     // Pending Ahmed's confirmation — see comment above.
     blurb: 'FastAPI services on Supabase and Postgres, object storage on Cloudflare R2, deployed to Render.',
@@ -167,12 +177,14 @@ export const skills = [
   },
   {
     componentKey: 'rotors',
+    nameplate: 'ROTORS',
     title: 'Full-Stack Web Dev',
     blurb: 'Modern JS + HTML/CSS frontends on FastAPI or Google Apps Script backends.',
     tags: ['JS', 'HTML/CSS', 'GAS backends'],
   },
   {
     componentKey: 'battery',
+    nameplate: 'BATTERY',
     title: 'Deployment & CI/CD',
     // Pending Ahmed's confirmation — see comment above.
     blurb: 'GitHub Actions pipelines, automated builds, static hosting on Pages.',
