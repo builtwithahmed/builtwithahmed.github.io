@@ -3,6 +3,410 @@
 Log of what was tried and rejected, per MISSION_PLAN.md §0, so later phases
 don't repeat dead ends. Newest entries at the top.
 
+## 2026-07-27 — v1.4 convergence pass: analytic reference pose, nameplate
+## X-column audit, gate reaches its target clean state
+
+Closes both threads the previous entry (below) flagged but didn't resolve —
+the rotation-reset artifact and the vertical-segment X-column crossing —
+plus a systematic audit that found three more instances of the same
+X-column pattern. Full gate (4 drift phases, both viewports, freeze +
+dilation) now reports **only** the four pre-existing mobile teardown
+overflow residuals; nothing else, at every phase.
+
+**Analytic reference pose (item 1) — replaces the flat (0,0,0) captureFreeze
+forced before.** The previous entry's rotation-reset finding was real: live
+flight's `drone.rotation` is a damped response to frame-to-frame position
+deltas, never (0,0,0) during actual motion, so forcing it to zero for
+determinism was ALSO changing where components land on screen relative to a
+live visitor. Fix: `director.js`'s `sampleKeyframes` now also returns
+`tangent` — `droneCurve.getTangent(uCurve)`, three.js's own stock
+finite-difference tangent, a pure function of `uCurve` (itself a pure
+function of T, see the existing `uCurve` comment) with no wall-clock/dt
+anywhere in it. A new `sampleDroneRotation(tangent)` derives yaw/bank/pitch
+from this unit direction using the SAME formulas `drone.js`'s live branch
+already uses (`atan2` for yaw, `-x*0.6` for bank, speed-scaled tilt for
+pitch) — fed an implicit "speed=1" (the tangent is normalized) rather than a
+live frame-rate-dependent magnitude, since `getTangent`'s own parameter
+(`uCurve`) doesn't track this rig's uneven per-segment pacing (teardown
+lingers, mission-map cruises) the way real T does — only its DIRECTION is a
+meaningful, pacing-independent quantity here. `state.droneRotation` is set
+every `director.update()`; `main.js` threads it into `drone.update()` as
+`analyticRotation`; `drone.js`'s `captureFreeze` branch now does
+`drone.rotation.set(analyticRotation.x, analyticRotation.y,
+analyticRotation.z)` instead of `.set(0, 0, 0)`. Still a pure function of T
+(same determinism guarantee the zero pose had — two sessions at the same T
+still render bit-identical rotation), just a representative flight pose
+instead of a flat one.
+
+**Gate certifies the representative pose; a byte-identity screenshot proof
+would certify a fixed reference pose — these are different needs, not
+competing answers to the same question.** No currently committed script
+does the latter (the 2026-07-24 AA-floor determinism check that cared about
+byte-identity was a one-off manual investigation, and it only needed
+"same T → same pixels," which the analytic pose satisfies exactly as well as
+zero did). Left `drone.js`'s `captureFreeze` branch single-purpose rather
+than adding an unused `zeroPose` toggle — the change is one line
+(`drone.rotation.set(0, 0, 0)`) if a future script ever needs literal zero
+specifically, and there's no committed caller to keep in sync in the
+meantime.
+
+**Re-classifying the three mobile "rotation-reset" overlaps (item 2) against
+the analytic pose:**
+
+- **t=0.32/0.34 (gimbal vs. battery's nameplate) and t=0.50 (gimbal vs.
+  `.project-block`): ARTIFACT, confirmed gone.** Both were absent from the
+  very first re-run under the analytic pose (drift phase 0) and every phase
+  after. A direct live-vs-frozen NDC comparison (a scratch script, not
+  committed) also shows the analytic pose tracking live rotation far more
+  closely than zero did at these T's — e.g. t=0.50 mobile's gimbal delta
+  dropped from the previously-measured ~28px (~0.066 NDC) down to ~6px
+  (~0.015 NDC) — small enough that neither collision reappears.
+- **t=0.22 (flightController vs. escArms's nameplate): REAL, not an
+  artifact — confirmed present under LIVE rotation too, not just frozen.**
+  Sampled 5 live (unfrozen) frames at this T plus one frozen frame (a
+  scratch script): flightController's projected point sat inside escArms's
+  nameplate rect in literally every sample, live or frozen. This was never
+  actually a rotation-reset side effect — captureFreeze (any pose) just
+  made a pre-existing collision deterministic enough to reliably catch, the
+  same way the freeze surfaced the decode.js blurb-guard bug in the
+  previous entry. Fixed by the escArms nudge below (item 3) — the same
+  offset change that resolves the desktop X-column crossing also resolves
+  this, since it moves escArms's nameplate away from the same cluster of
+  adjacent-in-sequence components on both viewports at once.
+
+**NAMEPLATE X-AUDIT (item 3) — the reported escArms/antenna crossing was one
+instance of a repeating pattern, not a one-off.** Built a two-stage tool
+(scratch, not committed): a capture script dumps every nameplate rect + every
+visible leader line's `d`-path geometry at 0.005 T-resolution (vs. the gate's
+own 0.02) across the full teardown range, both viewports, under the same
+freeze+dilation the real gate uses; a pure-Node analysis script then replays
+the gate's own two collision checks (point-in-rect, line-segment-vs-rect)
+against that data, reconstructing any candidate offset's rect from the
+component's own captured dot position — so a candidate `NAMEPLATE_OFFSETS`
+fix could be tried instantly against the whole sampled range without a
+rebuild+rerun per guess, only re-verifying the winning candidate against the
+real Playwright gate at the end.
+
+Root cause, stated once for all four instances found: a leader line's elbow
+routing (`callouts.js`'s `elbowX`) keeps its VERTICAL run at a fixed X —
+either the dock-column seam, or, when a component's own dot already sits
+past that seam, the component's own screen X. A Y-only offset (all the
+previous pass had) can dodge a line's HORIZONTAL run (pinned at a roughly
+fixed content-column Y) but structurally cannot dodge a vertical run, which
+by construction spans a large Y range. Any nameplate sitting in that X
+column gets crossed regardless of its Y offset. Four instances, all fixed by
+increasing the magnitude of an axis that component's offset already used
+(no new direction introduced):
+
+1. **escArms vs. antenna's line — the originally reported case, and it
+   turned out to be two separate overlaps, not one.** The existing -18px Y
+   shift (previous entry) only cleared the UNDILATED rect; dilated by the
+   gate's own +10px, the margin was consumed again at nearby sub-T's
+   (T~0.245-0.255, not the exact T=0.24 originally measured) — same graze,
+   not a new one. Separately, escArms's nameplate (X unchanged until now)
+   sat squarely inside antenna's line's own vertical column. Fixed with
+   `x: -24 -> -60`, `y: -18 -> -34` — both re-verified against the full
+   fine-grained sweep, not just the one originally reported T.
+2. **gimbal vs. escArms's OWN line, T~0.215-0.235 desktop.** escArms's line
+   routes its horizontal run into its own label at a fixed content-column Y
+   (~471); gimbal's nameplate had no Y offset at all (`y: 0`) and its
+   dilated bottom edge reached that Y early in the ramp before gimbal's own
+   dot had climbed further away. Fixed with `y: 0 -> -20`.
+3. **rotors' line vs. antenna's nameplate, T~0.30-0.305 desktop.** Same
+   vertical-column pattern as #1, mirrored: rotors' line's vertical run
+   sits at rotors' own screen X once past the dock seam, and antenna's
+   nameplate (unchanged since #1's fix was still being tuned) reached into
+   that column. Fixed with antenna's `x: -32 -> -45` (the same fix as #1
+   already needed a larger magnitude; this pushed it further still).
+4. **antenna vs. battery's nameplate, mobile only, T~0.37-0.375 (the
+   reassembly window, right before battery's own explode-threshold
+   cutoff).** Not a leader-line case — antenna's DOT simply passes through
+   the box battery's `y: -17` offset put its nameplate in as the drone
+   reassembles. Tried sliding battery along X first (its own existing axis
+   of separation from the rest of the mobile cluster) — made it worse (14-18
+   new failures swept from -10 through -30): mobile's tight
+   `EXPLODE_SCALE_MOBILE=0.45` cluster means moving battery's nameplate left
+   moves it INTO escArms/gimbal's own positions, not away from antenna's.
+   Y was the right axis: `y: -17 -> -10` (back toward battery's own dot,
+   smaller upward shift) clears antenna's transient path without re-entering
+   anyone else's position. Confirmed via the same full-range sweep — 0
+   failures, not just 0 at the two originally-observed T's.
+
+**Full gate re-run (item 4): 4 drift phases, both viewports, freeze +
+dilation + analytic pose — identical result at every phase, and it's now
+the target state exactly, nothing left to restate as an accepted
+residual:**
+
+| T / viewport | Type | What | Status |
+|---|---|---|---|
+| t=0.14, 0.16 mobile | overflow | `teardown-block` 357px vs. 346px | pre-existing since v1.1-B/v1.2, unchanged in value |
+| t=0.24, 0.26 mobile | overflow | `teardown-block` 349px vs. 346px | pre-existing since v1.1-B/v1.2, unchanged in value |
+
+Zero overlap, zero leader-line-overlap, zero blurb-guard, zero empty-frame
+failures at every T, every viewport, every one of the 4 pinned drift phases
+— strictly cleaner than the previous entry's table (which still carried 3
+desktop leader-line grazes and 3 "suspected artifact" mobile overlaps as
+accepted residuals). The determinism claim is also now simpler to state:
+previously there was still sub-pixel hitCount drift between phases on the
+leader-line grazes; with nothing left to graze, every phase's failure list
+is byte-for-byte identical, not just "the same category, tiny drift."
+
+**Copy check, re-confirmed:** `git status`/`data.js` still shows the v1.4
+six-card copy and new hero subline (unchanged by this pass — no copy edits
+made).
+
+**escArms/antenna graze (review item 1) — fixed the reported crossing,
+then a stricter check (below) found a second one the fix didn't touch.**
+Measured exact geometry at t=0.24 desktop: escArms's un-offset nameplate
+rect (top 458.6/bottom 474.6) overlapped antenna's own leader line's fixed
+horizontal run (y=473.97, pinned by CSS layout — confirmed stable across
+sessions/drift phases, not live-position-driven) by 0.66px. Shifted
+escArms -18px in y (`escArms: { x: -24, y: -18 }`, callouts.js) — minimum
+shift for ~15px clearance against that specific horizontal segment.
+Verified against the frozen reference (below): the RENDERED, undilated
+nameplate no longer touches that line. **But** the dilated leader-line
+check (below) still flags t=0.22/0.24/0.30 desktop, and tracing the exact
+geometry shows why: antenna's elbow has a VERTICAL segment too (dot down
+to dock height, x pinned at antenna's own screen x, y spanning ~420-474),
+and escArms's nameplate sits close enough in X to that column that the
+vertical run crosses it independent of escArms's Y — a Y-only shift
+can't fix an X-column crossing. Not chased further this pass; flagged
+for whoever picks this up next rather than papered over.
+
+**Gate determinism (review item 2) — captureFreeze enabled, and it
+immediately surfaced a real, previously-latent bug.** `npm run gate`
+now calls `window.__setCaptureFreeze(true)` unconditionally per viewport,
+before the T-step loop (gate.mjs). Re-running the identical command
+at the identical pinned drift phase had shown 6 failures once and 5 the
+next time (previous entry) — direct proof the un-frozen check was
+sensitive to live wall-clock state, not measuring a stable defect.
+
+That same freeze broke check 4 immediately: ~40 new `blurb-guard`
+failures, every one a `.blurb` stuck "revealing" past its 700ms budget.
+Root cause: `decodeBody` (decode.js) clears `dataset.revealing` from a
+`transitionend` listener on the last word-span; `html[data-capture-
+freeze] * { transition-duration: 0s !important }` (tokens.css, existing)
+means every transition the freeze touches now has a computed duration of
+0 — and per the CSS Transitions spec, a transition never starts to begin
+with, so `transitionend` never fires. Not a browser bug, not something
+the existing `!important` override could route around. Fixed by giving
+`decodeBody` a `captureFrozen()` check (reads `document.documentElement.
+hasAttribute('data-capture-freeze')`, the same signal the CSS itself
+already keys off) and folding it into the SAME early-return branch
+`reducedMotion()` already uses — final text placed instantly, no spans,
+nothing ever marked revealing, mirroring how a real prefers-reduced-
+motion visitor is already handled. Zero production effect (the attribute
+is only ever set behind main.js's `?debug` guard). `decodeHeading`/
+`decodeEyebrow` don't share this bug (their own completion signal is a
+`requestAnimationFrame` timing loop, not a CSS transition) — left
+untouched, narrower fix than "make everything capture-freeze-aware."
+
+**Nameplate rect dilation (review item 2, continued) — measured, then
+corrected the math once the flood of new failures didn't add up.**
+Measured each viewport's real pixel swing directly: held T=0.24 fixed,
+sampled a component's projected position for 12s (>1 full ~3s bob
+period) once speed settled toward 0 — 1440x900 swung ~19.2px (x) /
+~13.9px (y) peak-to-peak, 390x844 ~1.7px (x) / ~9.6px (y). First
+implementation dilated nameplate rects by the FULL swing on every side
+(reasoning: "the frozen sample could land anywhere in the range") —
+padded a 16px-tall rect out to 56px and flooded the leader-line check
+with dozens of encroachments that didn't represent real visual risk.
+Wrong reasoning, caught before trusting the output: `!captureFreeze`
+gates the entire hover-bob term in drone.js, so a frozen capture is
+never a random sample of the oscillation — it's always exactly the
+undisplaced center. The true live range is center +/- amplitude (half
+the swing), so dilating the known-center frozen rect by the amplitude on
+every side is what actually covers it; dilating by the full swing
+double-counts and overshoots. Corrected to `{ '1440x900': 10, '390x844':
+5 }` (gate.mjs's `NAMEPLATE_DILATE_PX`), applied only in the leader-line
+check per the review's own scope (check 1's plain overlap test is
+untouched).
+
+**New, separate finding: captureFreeze also forces `drone.rotation` to
+exactly (0,0,0) (drone.js, pre-existing, unrelated to this pass) — and
+that changes where components land on screen during active flight, not
+just whether the pose is deterministic.** Confirmed directly: at t=0.50
+mobile, gimbal's projected point sits at y=557.6 frozen vs. y=529.9 live
+(same T, same everything else, only `__setCaptureFreeze` toggled) — a
+~28px real shift, enough to cross into `.project-block`'s rect under
+frozen conditions only. During active banked flight the drone's natural
+rotation is presumably NOT (0,0,0), so the frozen reference pose here is
+neither "the live experience" nor obviously "a deterministic version of
+it" — it's a third, artificial pose a real visitor's rotation never
+actually settles into. This likely explains the mobile "overlap" entries
+below at t=0.22/0.32/0.34/0.50 that never appeared in any pre-freeze run
+(escArms-vs-flightController, battery-vs-gimbal, and the project-block
+one) — flagging this distinctly rather than folding it into "accepted
+nameplate residuals," since its root cause (rotation reset, not offset
+tuning) is a different problem than anything else in this file's
+nameplate work. Not investigated further or fixed this pass — surfaced
+for a decision on whether the reference pose should hold live rotation
+at frozen T instead of always zeroing it.
+
+**Complete current residual table** (full gate, 4 drift phases, both
+viewports, captureFreeze + dilation as above — identical failure
+structure at every phase, confirming the freeze delivers real
+determinism now; only sub-pixel coordinate drift between phases, one
+extra near-miss at phase 0.75 crossing at t=0.32 mobile in addition to
+the t=0.34 all four phases share):
+
+| T / viewport | Type | What | Status |
+|---|---|---|---|
+| t=0.22 desktop | leader-line-overlap | escArms's line vs. a DILATED nameplate rect (hitCount 27) | new since freeze+dilation; not present against the undilated render |
+| t=0.24 desktop | leader-line-overlap | antenna's line's vertical segment vs. escArms's (DILATED) nameplate (hitCount 8) | the "second crossing" above; real even before dilation on the vertical segment, per the X-column analysis |
+| t=0.30 desktop | leader-line-overlap | rotors' line vs. a DILATED nameplate rect (hitCount 3) | new since dilation |
+| t=0.14, 0.16, 0.24, 0.26 mobile | overflow | `teardown-block` 357/357/349/349px vs. 346px | pre-existing since v1.1-B/v1.2, confirmed UNCHANGED in value — the two inspection-block entries from the same historical ledger are gone, see below |
+| t=0.22 mobile | overlap | flightController's point vs. escArms's nameplate (undilated) | new since captureFreeze; suspected rotation-reset artifact |
+| t=0.32 (phase 0.75 only) / t=0.34 (all phases) mobile | overlap | gimbal's point vs. battery's nameplate (undilated) | new since captureFreeze; suspected rotation-reset artifact |
+| t=0.50 mobile | overlap | gimbal's point vs. `.project-block` | new since captureFreeze; confirmed rotation-reset artifact (isolated above, disappears with rotation live) |
+
+**Where the inspection-block residuals (2 of the historical 6) went:**
+confirmed via a runtime-only `--font-display` A/B (no file edit) that
+Rajdhani renders "Drone / ArduPilot Integration" (service row 3) on one
+line (21px) where the prior face wrapped it to two (36px) at the same
+container width — a 15px saving that happened to close a 5px-over gap.
+Unplanned; the font swap's own metrics-risk assessment only checked
+headings, not individual service titles.
+
+**Copy check:** current build has the v1.4 copy (new hero subline, all
+six new project titles) — not the old WPT set. Confirmed by reading
+data.js directly, not inferred.
+
+## 2026-07-25 — v1.4 identity pass: font lock, teardown nameplates, real copy
+
+**Font lock (1a).** `--font-display` Chakra Petch -> Rajdhani (tokens.css),
+Google Fonts URL's Chakra Petch segment replaced outright, not left
+alongside (grepped repo-wide afterward: zero remaining references, no dead
+font download). Confirmed beforehand that all three `--font-display` sites
+(hero/section h1+h2, callout h3, console-row h3) inherit their character-
+count width budgets from `--font-body`, never from the display face itself
+— none of the `ch`-based caps needed re-tuning for the swap. Build gz
+unaffected within noise (154.92 kB immediately after, vs 154.90 kB
+pre-pass).
+
+**Teardown nameplates (1b) — three real fixes, in order, each verified
+against the gate before moving to the next.** Built into callouts.js's
+existing per-frame loop (not a new module), one `<div class="nameplate">`
+per skill item appended to `<body>` directly (outside `.content-block`,
+so the anti-emptiness check can't see it without any special-casing) and
+positioned every frame at the same `sx,sy` the dot already computes.
+
+1. **First pass: nameplates visible for the whole explode ramp once
+   revealed (independent of the label's own prev/active/next window), one
+   shared `(+14, 0)` screen-space offset from the dot.** Extended
+   `gate.mjs` checks 1 (overlap) and 5 (leader-line) to include
+   `.nameplate` rects as new surfaces (self-excluded via
+   `dataset.component` / a new `path.dataset.sourceComponent`, parallel to
+   the existing `targetLabel`/`ownLabel` pattern) — immediately caught 18
+   real failures. Root cause: with persistence independent of the label
+   window, up to 6 nameplates render simultaneously late in the ramp: no
+   small constant offset separates that many dense text tags.
+2. **Tried a per-component hexagon-spread offset next** (six directions,
+   the two most frequent colliding pairs — gimbal/escArms, antenna/rotors
+   — placed 180° apart), reasoning from each component's own 3D explode
+   direction. Made it WORSE (58 failures) — 2D on-screen clustering across
+   a moving camera doesn't reliably follow from 3D explode-direction
+   reasoning alone; geometry intuition isn't a substitute for measuring.
+3. **Real fix: bind nameplate visibility to the SAME prev/active/next
+   window the label/dot/line already use**, instead of "visible for the
+   whole ramp." This is a simplification, not just a fix (folds back into
+   one shared `hide()`) and dropped failures 58 -> 19. Remaining 19
+   clustered exactly at the T range where `state.explode` (director.js's
+   sampleExplode, one shared k for all six components) is still low —
+   right after BAND_START (k ramping up from 0) and right before
+   reassembly finishes (k ramping back down) — confirmed by checking the
+   actual sampleExplode curve against the failing T values, not guessed.
+   At low k every component sits close to the drone's assembled core
+   regardless of its own explode direction, so no offset can separate
+   tags anchored that close together. Added `EXPLODE_VISIBLE_THRESHOLD =
+   0.35`: a nameplate additionally requires `state.explode >= 0.35` to
+   show (label/dot/line don't have this problem — the label docks off in
+   the content column, the dot/line just track wherever the part actually
+   is). Dropped 19 -> 5, clearing every failure except a narrow band
+   around T=0.23-0.26 (antenna's own reveal edge). One more offset
+   iteration (antenna moved off a shared "down" direction with battery,
+   which also explodes screen-downward, onto an unused up-left direction)
+   cleared every mobile failure and left **3 single-sample-point
+   leader-line grazes** (desktop only, T~0.23-0.25, out of 36+ samples per
+   line) — accepted per the same diminishing-returns precedent as this
+   file's other residuals (Table D 2026-07-19, the mobile overflow
+   entries below). Full gate at all 4 drift phases confirms this is
+   stable: identical result at phases 0/0.25/0.5, one extra hairline graze
+   at 0.75 (2 hits instead of 1, same T window) — drift shifting a
+   near-miss by a few pixels, not a new systemic issue.
+   Amber dim/active state uses opacity only (0.5 -> 1), not a color
+   switch like the dot/line's cyan->amber — nameplates are amber at every
+   visible state per the brief, so color has nowhere "up" to shift to.
+
+**Copy integration (1c).** Hero subline changed and measured in isolation
+FIRST, before any other Step 2 work, per instruction: 0px overflow both
+viewports (272/272 desktop, 232/232 mobile) — real margin, not a near
+miss, despite the new copy being a similar length to the old. Six project
+cards replaced 1:1 in the existing WPT-01..06 slots (map.js/director.js
+untouched, confirmed map.js's waypoint math is parametric over array
+length but the WAYPOINTS coordinates themselves are hand-placed along the
+flight corridor — additive would have been a real spatial-design task, not
+a copy edit, which is why replacement was the right call). New titles
+measure shorter than the old longest (`WPT-02 · Crash Forensics` ~35 chars
+vs the old `WPT-05 · File Storage API (R2 + FastAPI)` ~40) — no title-wrap
+regression risk. Added a `link: null` field to each project (data-only —
+projectCallouts.js's template doesn't reference it, so null renders
+exactly as before the field existed; matches this file's own established
+precedent of not building unreached rendering code, and the "re-add both
+together once real URLs exist" comment already on this array from when
+`github` was removed).
+
+**Real finding while checking the flagged blurb-length risk: mobile (and
+even desktop) project cards never show two FULLY EXPANDED rows
+simultaneously under real continuous scroll, contrary to this file's own
+prior "previous, active, next" framing of the windowing design.** Traced
+through the reveal math: a windowed "next" item's own reveal threshold
+(`T >= BAND_START + i*BAND_WIDTH`) is the exact same T value where
+`bandIndex` itself advances to make it active — so under continuous
+(non-reduced) motion, the moment an item becomes revealed is the same
+moment the window shifts to exclude whatever was previously showing.
+Verified with a dense 0.005-step sweep, both viewports, across the full
+cards 1-2 transition: mobile shows exactly one project card at a time,
+desktop genuinely shows two (previous does NOT drop the reveal-edge
+coincidence, since a *previous* item was already revealed and stays so
+once the window includes it). 0px overflow at every sampled point either
+way, including desktop's genuine two-simultaneous case with the new,
+longer blurbs (140-160 chars vs the old ~95-108) — the flagged risk didn't
+materialize, and this "next slot is a phantom under continuous motion"
+detail is worth remembering if a future pass ever wants a true
+2-simultaneous mobile reveal (it doesn't currently exist, despite reading
+that way from the code comments alone).
+
+**Gate result:** build 155.40 kB gz (Rajdhani's 600/700 weights net
+roughly the same payload as Chakra Petch's did — no meaningful budget
+movement from the font swap itself; the nameplate JS/CSS + new copy
+account for the ~0.5 kB delta from the pre-pass baseline). `npm run
+verify`: PASS (only benign SwiftShader `GPU stall due to ReadPixels`
+performance warnings from the `?debug` instrumentation, no errors). Full
+gate at drift phases 0/0.25/0.5/0.75, both viewports: consistent
+across all four — the 3 accepted nameplate grazes (2 at phase 0.75) plus
+the same 4 pre-existing mobile teardown-block overflow entries already
+documented in the 2026-07-23/24 entries below, unchanged in value
+(357/357/349/349px vs the 346px budget) confirming this pass didn't grow
+them. Fresh screenshots (desktop t=0.00/0.24/0.30/0.72/0.97, mobile
+t=0.30/0.97) spot-checked visually: hero fits its budget on 3 lines
+cleanly, nameplate dim/active contrast reads correctly (dim ANTENNA vs.
+bright ROTORS matching the active band), no visible collisions at any
+sampled frame. Recordings (0->1->0, continuous scroll, not
+jump-and-settle — ambient motion left live, no captureFreeze/DRIFT_PHASE
+pin): desktop captured at tier=LOW per this pass's own instruction (cost
+mitigation for a continuous capture, labeled in both filename and script
+output) — real capture time 23s vs. 14s nominal (~1.6x, tracking
+NOTES.md's own tier=LOW inflation estimate); mobile at tier=HIGH default,
+41s vs. 14s nominal (~2.9x, tracking the tier=HIGH estimate). Notably the
+LOW-tier desktop recording (3.27MB) is smaller than the HIGH-tier mobile
+one (5.39MB) despite more pixels — the inverse of the v1.3 pass's own
+recording-size note, and directly explained by it: no composer
+(bloom/vignette/grain) compresses far better, and this pass's script uses
+a separate `browser.newContext` per viewport rather than one shared
+launch, so there's no warm-up-cost asymmetry to fight against the pixel-
+count difference this time.
+
 ## 2026-07-24 — v1.3 visual debt pass: tier pinning, hero material fix, mobile
 ## framing generalized, leader-line gate check
 
