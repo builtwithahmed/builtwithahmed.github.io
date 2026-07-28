@@ -10,7 +10,7 @@ export const identity = {
   availability: 'Armed · Open to freelance', // v1 .hero-badge
   heroHeadlineLines: ['Python Dev &', 'Drone Engineer'], // v1 #hero h1 (two lines, accent on line 2)
   heroSub:
-    'I build production-grade REST APIs, automation systems, and drone telemetry tools. ArduPilot specialist. Based in Jamshedpur, India — flying globally.',
+    'I configure real aircraft, trace crashes through flight logs, and build the software around the airframe — APIs, automation, dashboards. Jamshedpur, India — flying globally.',
   ctaPrimary: { label: 'Fly the Mission', href: '#projects' },
   ctaSecondary: { label: 'Get in Touch', href: '#contact' },
 };
@@ -34,47 +34,59 @@ export const missionLog = {
 };
 
 // §6.3's WPT-01..06 order matches the flight path/map waypoints 1:1 (map.js
-// WAYPOINTS array). v1.2.1 #5: these repos don't exist yet, so there's no
-// real link to show — no `github` field, no icon/anchor in the card
-// template (projectCallouts.js) rather than shipping a placeholder
-// https://github.com dead link. Re-add both together once real repo URLs
-// exist.
+// WAYPOINTS array). v1.4 Step 1c: replaced verbatim (Ahmed's advisor copy)
+// in the same six WPT slots — no waypoint/director change, per explicit
+// approval, since map.js's coordinates are hand-placed along the flight
+// corridor, not derived from project count. `link` (generalized from the
+// old hypothetical `github` field) is null for all six: a real URL isn't
+// ready yet, and projectCallouts.js's card template doesn't reference this
+// field at all, so null renders exactly as before this field existed — no
+// icon, no anchor. Re-add the template's rendering branch once a real URL
+// exists to point it at; building that branch now, unreachable by every
+// current entry, would be exactly the speculative code this codebase's own
+// history (the removed `github` field/link, 4753eba) already backed out of.
 export const projects = [
   {
     wpt: 'WPT-01',
-    title: 'ArduPilot Log Parser',
-    blurb: 'Parses ArduPilot .BIN flight logs — GPS, IMU, attitude, battery, and error data into structured CSV/JSON.',
-    tags: ['Python', 'MAVLink', 'Data'],
+    title: 'FlightLogAI',
+    blurb: 'Live ArduPilot log-analysis platform — upload a dataflash log, get flight diagnostics a pilot can act on. FastAPI, Supabase/Postgres, Cloudflare R2, deployed on Render.',
+    tags: ['FastAPI', 'Supabase', 'R2'],
+    link: null,
   },
   {
     wpt: 'WPT-02',
-    title: 'FastAPI Backend Starter',
-    blurb: 'Production template — JWT auth, CRUD, Supabase, CORS, Render deploy config. Fork and ship.',
-    tags: ['FastAPI', 'Supabase', 'JWT'],
+    title: 'Crash Forensics',
+    blurb: '20+ real crash investigations closed from logs alone: RCIN/RCOUT traces, ERR/EV events, EK3 lane switching, compass interference. Root cause, not guesswork.',
+    tags: ['ArduPilot', 'EKF3', 'Dataflash'],
+    link: null,
   },
   {
     wpt: 'WPT-03',
-    title: 'Drone Telemetry Dashboard',
-    blurb: 'Real-time web dashboard for flight telemetry — GPS path, altitude, battery, anomalies over live MAVLink.',
-    tags: ['Python', 'MAVLink', 'Charts'],
+    title: 'HR Voice AI Agent',
+    blurb: 'Answers HR calls, understands the query, and files a ticket with call summary and recording — handling intake for an entire HR department.',
+    tags: ['Voice AI', 'Python', 'Automation'],
+    link: null,
   },
   {
     wpt: 'WPT-04',
-    title: 'Google Sheets Automation',
-    blurb: 'Apps Script system automating workflows — data sync, reports, email triggers, dashboards.',
-    tags: ['Apps Script', 'Sheets API'],
+    title: 'Revenue Tracker',
+    blurb: 'Field teams across India log site entries; management dashboards surface team performance by site, org-wide.',
+    tags: ['Dashboards', 'Data', 'Python'],
+    link: null,
   },
   {
     wpt: 'WPT-05',
-    title: 'File Storage API (R2 + FastAPI)',
-    blurb: 'Upload/download REST API on Cloudflare R2 — presigned URLs, metadata, access control.',
-    tags: ['FastAPI', 'R2', 'S3 API'],
+    title: 'Conference Room Booking',
+    blurb: 'Organisation-wide room scheduling — bookings, conflicts, and availability handled end to end.',
+    tags: ['Automation', 'Web App'],
+    link: null,
   },
   {
     wpt: 'WPT-06',
-    title: 'YouTube Tools Suite',
-    blurb: 'Content automation — subtitle generation, thumbnail batching, metadata via YouTube Data API.',
-    tags: ['Python', 'YouTube API'],
+    title: 'Alert & Escalation Engine',
+    blurb: 'Automated task alerts with escalation chains, so nothing stalls silently.',
+    tags: ['Automation', 'Python'],
+    link: null,
   },
 ];
 
