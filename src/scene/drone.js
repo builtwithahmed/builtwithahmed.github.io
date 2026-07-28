@@ -269,7 +269,7 @@ export function createDrone() {
   // Flight behaviour driven by the director's sampled target position.
   // `flying` is false once T is in the final landing settle (T >= 0.985),
   // matching v1's landed-state spin/bob cutoff.
-  function update(dt, targetPos, { time, reducedMotion, flying, captureFreeze }) {
+  function update(dt, targetPos, { time, reducedMotion, flying, captureFreeze, analyticRotation }) {
     const damp = reducedMotion ? 1 : 1 - Math.exp(-4.2 * dt);
 
     prevPos.copy(drone.position);
@@ -294,8 +294,18 @@ export function createDrone() {
     // which does converge to bit-identical given enough settle time), this
     // never converges no matter how long you wait. captureFreeze forces a
     // fixed, deterministic resting pose instead of trusting the latch.
+    //
+    // v1.4 post-review (2): that fixed pose used to always be (0,0,0) —
+    // deterministic, but not a pose live flight ever actually settles into
+    // (confirmed: at t=0.50 mobile it put gimbal ~28px from its live
+    // projected position, crossing into `.project-block` only when frozen).
+    // `analyticRotation` (director.js's sampleDroneRotation) derives the
+    // same yaw/bank/pitch this branch's `else` computes live, but from the
+    // spline's own tangent direction at this T instead of a frame-to-frame
+    // position delta — pure function of T, so still fully deterministic,
+    // just a representative flight pose instead of a flat one.
     if (captureFreeze) {
-      drone.rotation.set(0, 0, 0);
+      drone.rotation.set(analyticRotation.x, analyticRotation.y, analyticRotation.z);
     } else {
       if (speed > 0.15) {
         const yaw = Math.atan2(vx, vz);

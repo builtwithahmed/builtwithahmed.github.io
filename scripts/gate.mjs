@@ -72,6 +72,27 @@ const VIEWPORTS = [
   { name: '390x844', width: 390, height: 844 },
 ];
 const STEPS = Array.from({ length: 51 }, (_, i) => i / 50);
+// v1.4 Step 3 (post-review): now that gate runs are frozen (above), a
+// nameplate's own rect never moves DURING a gate run — but a real visitor
+// sees it wobble with drone.js's hover bob (live, unfrozen), so a frozen
+// snapshot can show clearance a live session wouldn't have. Measured each
+// viewport's own actual pixel swing directly (not computed from world
+// units): held T=0.24 fixed, sampled a component's projected screen
+// position for 12s (>1 full ~3s bob period) once speed had settled toward
+// 0 -- 1440x900 swung ~19.2px (x) / ~13.9px (y) peak-to-peak, 390x844
+// ~1.7px (x) / ~9.6px (y). The dilation uses HALF that swing (the
+// amplitude around center), not the full swing: `!captureFreeze` gates
+// the bob term entirely (drone.js), so a frozen capture always lands
+// EXACTLY at the undisplaced center, never at a random phase of the
+// oscillation -- the true live range is center +/- amplitude, so
+// dilating the known-center frozen rect by the amplitude on every side
+// fully covers it. (First tried the full swing, reasoning the frozen
+// sample could land anywhere in the range -- wrong once actually checked
+// against how the freeze guard works, and it flooded the leader-line
+// check with encroachments into a zone far larger than physically
+// justified, e.g. a 16px-tall rect padded to 56px.) Rounded up to a
+// clean number per viewport, larger axis only.
+const NAMEPLATE_DILATE_PX = { '1440x900': 10, '390x844': 5 };
 // v1.2.1 Step 2: camera drift (main.js) is wall-clock driven, so an unpinned
 // gate run samples it at whatever phase the settle timing happened to land
 // on. DRIFT_PHASE pins it via window.__setDriftPhase for a reproducible run;
@@ -146,6 +167,19 @@ for (const vp of VIEWPORTS) {
   if (DRIFT_PHASE !== null) {
     await page.evaluate((p) => window.__setDriftPhase(p), DRIFT_PHASE);
   }
+  // v1.4 Step 3 (post-review): the gate certifies geometry, not live
+  // visitor experience -- it needs one deterministic reference pose per
+  // T, not whatever wall-clock-driven state (rotor spin, hover bob, tower
+  // scan/beacon/defects, map waypoint pulse) a given run happens to settle
+  // on. Re-running the identical `npm run gate` command at the identical
+  // pinned drift phase produced 6 failures once and 5 the next time --
+  // direct proof the un-frozen check was sensitive to live motion at
+  // graze margins, not measuring a stable defect. Always on for gate
+  // runs now (unconditional, unlike DRIFT_PHASE which stays opt-in) --
+  // live-motion risk the freeze can no longer catch is covered instead by
+  // the rect dilation below, a deliberately separate safety net.
+  await page.evaluate(() => window.__setCaptureFreeze(true));
+  const dilatePx = NAMEPLATE_DILATE_PX[vp.name] ?? 20;
 
   for (const t of STEPS) {
     await page.evaluate((tt) => {
@@ -160,7 +194,7 @@ for (const vp of VIEWPORTS) {
     const blurbFailures = await checkBlurbGuard(page);
     await page.waitForTimeout(400);
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate((dilate) => {
       const ndc = window.__debugNDC();
       const cssW = window.innerWidth;
       const cssH = window.innerHeight;
@@ -252,8 +286,22 @@ for (const vp of VIEWPORTS) {
       // skill callout's line must not cross a DIFFERENT component's tag en
       // route to its dock label. `component` is recorded so a line can
       // exclude its own component's nameplate below (see ownComponent).
+      // v1.4 Step 3: dilated by `dilate` px on every side — this run is
+      // frozen (above), so the captured rect is one static instant of a
+      // nameplate that wobbles with live hover bob outside the gate;
+      // widening the "don't cross" zone by the measured swing means a
+      // live session can't graze something a frozen snapshot missed.
       document.querySelectorAll('.nameplate.visible').forEach((el) => {
-        leaderLineRects.push({ el, rect: el.getBoundingClientRect(), component: el.dataset.component });
+        const r = el.getBoundingClientRect();
+        const dilated = {
+          left: r.left - dilate,
+          right: r.right + dilate,
+          top: r.top - dilate,
+          bottom: r.bottom + dilate,
+          width: r.width + dilate * 2,
+          height: r.height + dilate * 2,
+        };
+        leaderLineRects.push({ el, rect: dilated, component: el.dataset.component });
       });
 
       const SAMPLES_PER_SEGMENT = 12;
@@ -346,7 +394,7 @@ for (const vp of VIEWPORTS) {
       });
 
       return { overlaps, anyVisible, clipped, leaderLineHits, layout: ndc.layout, focus: ndc.focus };
-    });
+    }, dilatePx);
 
     if (result.overlaps.length) {
       totalFailures++;

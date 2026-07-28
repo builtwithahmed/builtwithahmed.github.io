@@ -175,6 +175,7 @@ const droneCurve = new CatmullRomCurve3(KEYFRAMES.map((k) => new Vector3(...k.dr
 const camPoint = new Vector3();
 const lookPoint = new Vector3();
 const dronePoint = new Vector3();
+const droneTangent = new Vector3();
 
 function smoothstep(u) {
   return u * u * (3 - 2 * u);
@@ -232,6 +233,13 @@ function sampleKeyframes(t) {
     cam: camCurve.getPoint(uCurve, camPoint).toArray(),
     look: lookCurve.getPoint(uCurve, lookPoint).toArray(),
     drone: droneCurve.getPoint(uCurve, dronePoint).toArray(),
+    // v1.4 post-review (2): captureFreeze's reference pose (below) needs a
+    // flight DIRECTION at this T, not just a position — droneCurve.getTangent
+    // is a pure function of uCurve (finite-differences the curve's own
+    // getPoint internally, Three's stock Curve.getTangent, no wall-clock/dt
+    // anywhere in it), so this is deterministic and T-continuous the same
+    // way `drone` above is.
+    tangent: droneCurve.getTangent(uCurve, droneTangent).toArray(),
     mobileGap: gapA + (gapB - gapA) * u,
     mobileLookX,
     mobileLookY,
@@ -275,6 +283,39 @@ function sampleExplode(t) {
   return 0;
 }
 
+// v1.4 post-review (2): captureFreeze (drone.js) used to force drone.rotation
+// to a flat (0,0,0) — deterministic, but not a pose a real flight ever
+// settles into (rotation there is otherwise a damped response to live
+// frame-to-frame position deltas, so (0,0,0) only happens if speed never
+// crossed the yaw threshold and the drone never banked/pitched at all).
+// Confirmed directly this pass: at t=0.50 mobile the zero pose put gimbal
+// ~28px away from its LIVE projected position, crossing into
+// `.project-block` only under freeze — an artifact of the pose, not a real
+// layout risk.
+//
+// This derives yaw/bank/pitch the same way drone.js's own live formula does
+// (atan2 of the lateral/forward components for yaw, -x*0.6 for bank,
+// speed-scaled forward tilt for pitch) but fed the curve's own unit TANGENT
+// direction at this T instead of a live, frame-rate-dependent position
+// delta. Using the unit tangent (not a raw finite-difference magnitude)
+// is deliberate: droneCurve.getTangent(uCurve) is parameterized by the
+// curve's own index-uniform u, not real T, so its raw magnitude doesn't
+// track this rig's hand-tuned per-segment pacing (teardown lingers,
+// mission-map cruises) — only its DIRECTION is a meaningful, pacing-
+// independent quantity. Feeding that direction through the live formulas
+// at an implicit "speed=1" gives the same bounded ranges the live formula
+// caps at (bank maxes at 0.6 rad, exactly like a live full-lateral turn;
+// pitch holds the live formula's own 0.05-at-speed-1 floor) — a reasonable,
+// deterministic stand-in "cruise" pose, not a real per-frame simulation.
+function sampleDroneRotation(tangent) {
+  const [tx, ty, tz] = tangent;
+  return {
+    y: Math.atan2(tx, tz),
+    z: -tx * 0.6,
+    x: 0.05 * (tz < 0 ? 1 : -1),
+  };
+}
+
 export function createDirector() {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -293,6 +334,11 @@ export function createDirector() {
     cam: [...KEYFRAMES[0].cam],
     look: [...KEYFRAMES[0].look],
     dronePos: [...KEYFRAMES[0].drone],
+    // v1.4 post-review (2): the ANALYTIC reference pose captureFreeze snaps
+    // the drone to (drone.js) — see sampleDroneRotation below for how this
+    // is derived. Placeholder here; update() sets the real value every
+    // frame before anything reads it.
+    droneRotation: { x: 0, y: 0, z: 0 },
     explode: 0,
     altitude: 0,
     speed: 0,
@@ -349,6 +395,7 @@ export function createDirector() {
     state.look = [lookX, lookY, sample.look[2]];
     prevDronePos = state.dronePos;
     state.dronePos = sample.drone;
+    state.droneRotation = sampleDroneRotation(sample.tangent);
     state.focus = sample.focus;
     // §6(6): reduced motion skips the explode animation — component parts
     // are simply exploded (k=1) for the whole teardown range, not ramped.

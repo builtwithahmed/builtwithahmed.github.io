@@ -35,6 +35,25 @@ function reducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+// v1.4 Step 3 (post-review): a CSS transition with a computed duration of
+// 0 never fires `transitionend` at all (no transition instance is created
+// to fire it from) — per spec, not a browser bug. decodeBody's first-time
+// reveal path clears `dataset.revealing` from exactly that event, so
+// enabling captureFreeze in gate.mjs (tokens.css's `html[data-capture-
+// freeze] * { transition-duration: 0s !important }`) left every blurb
+// stuck "revealing" forever once triggered — confirmed by the gate itself
+// immediately after enabling freeze (dozens of blurb-guard failures where
+// none existed before). Reusing reducedMotion()'s existing early-return
+// (final text placed instantly, no spans, nothing ever marked revealing)
+// for captureFreeze too is the minimal fix: that branch already handles
+// "skip the animation, show the settled state" for real visitors with
+// prefers-reduced-motion, and captureFreeze wants exactly the same
+// outcome for a different reason. `data-capture-freeze` is only ever set
+// behind main.js's `?debug` guard, so this has zero effect in production.
+function captureFrozen() {
+  return document.documentElement.hasAttribute('data-capture-freeze');
+}
+
 function randomGlyph() {
   return SCRAMBLE_GLYPHS[(Math.random() * SCRAMBLE_GLYPHS.length) | 0];
 }
@@ -198,7 +217,7 @@ export function decodeBody(el) {
   // 700ms revealing-duration guard.
   el.classList.add('blurb');
   const text = el.textContent;
-  if (reducedMotion() || !text.trim()) {
+  if (reducedMotion() || captureFrozen() || !text.trim()) {
     everDecoded.add(el);
     return; // text is already in place; nothing to animate
   }

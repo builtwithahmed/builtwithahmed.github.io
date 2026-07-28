@@ -121,7 +121,13 @@ function tick() {
   const flying = state.T < 0.985;
 
   drone.explode(state.explode, state.explodeScale, activeComponentKey(state.T));
-  drone.update(dt, state.dronePos, { time, reducedMotion: state.reducedMotion, flying, captureFreeze });
+  drone.update(dt, state.dronePos, {
+    time,
+    reducedMotion: state.reducedMotion,
+    flying,
+    captureFreeze,
+    analyticRotation: state.droneRotation,
+  });
   dustRing.update(state.T, state.reducedMotion);
   map.update(state.T, time, state.reducedMotion, captureFreeze);
   tower.update(time, state.reducedMotion, captureFreeze);
