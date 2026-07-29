@@ -49,6 +49,10 @@
    opacity/transform fade-out has actually finished (transition-delay on
    visibility alone, only in the "leaving" direction). */
 .callout-label {
+  /* Anchor for .callout-external-link (below) — the only absolutely-
+     positioned child a label ever has, so this has no other layout to
+     interact with. */
+  position: relative;
   visibility: hidden;
   opacity: 0;
   max-height: 0;
@@ -120,6 +124,29 @@
   color: var(--warn);
   border-color: rgba(255, 176, 58, 0.3);
   background: rgba(255, 176, 58, 0.08);
+}
+
+/* Post-review amendment: FlightLogAI's real URL, the only one of the six
+   project cards with one. Absolutely positioned (relative to
+   .callout-label, above) precisely so it CANNOT affect the h3 title's own
+   line count/wrap or the label's box height — it overlays the label's own
+   top-right corner rather than sharing a line with any text content. */
+.callout-label .callout-external-link {
+  position: absolute;
+  top: 12px;
+  right: 4px;
+  font-family: var(--font-hud);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--signal);
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 150ms ease, color 150ms ease;
+}
+.callout-label.active .callout-external-link { color: var(--warn); }
+.callout-label .callout-external-link:hover,
+.callout-label .callout-external-link:focus-visible {
+  opacity: 1;
 }
 
 /* v1.4 Step 1b: diegetic hardware tags, anchored every frame to each

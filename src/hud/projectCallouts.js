@@ -36,12 +36,22 @@ export function createProjectCallouts({ camera, waypoints, mountEl }) {
     // leader-line check exclude this line's own destination rect.
     label.id = `callout-label-project-${index}`;
     path.dataset.targetLabel = label.id;
+    // link renders only when truthy (data.js) — an absolutely-positioned
+    // badge, not inline with the h3 text, so it can't affect the title's
+    // own line count/wrap and can't be a target of decodeHeading (below),
+    // which owns h3's plain textContent for the scramble reveal and
+    // documents itself as incompatible with nested markup.
     label.innerHTML = `
       <h3>${project.wpt} · ${project.title}</h3>
       <p>${project.blurb}</p>
       <div class="tags">
         ${project.tags.map((tag) => `<span class="tag">${tag}</span>`).join('')}
       </div>
+      ${
+        project.link
+          ? `<a class="callout-external-link" href="${project.link}" target="_blank" rel="noopener" aria-label="Visit ${project.title} (opens in a new tab)">↗</a>`
+          : ''
+      }
     `;
     mountEl.appendChild(label);
 

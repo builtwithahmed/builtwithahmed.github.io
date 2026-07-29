@@ -38,20 +38,25 @@ export const missionLog = {
 // in the same six WPT slots — no waypoint/director change, per explicit
 // approval, since map.js's coordinates are hand-placed along the flight
 // corridor, not derived from project count. `link` (generalized from the
-// old hypothetical `github` field) is null for all six: a real URL isn't
-// ready yet, and projectCallouts.js's card template doesn't reference this
-// field at all, so null renders exactly as before this field existed — no
-// icon, no anchor. Re-add the template's rendering branch once a real URL
-// exists to point it at; building that branch now, unreachable by every
-// current entry, would be exactly the speculative code this codebase's own
-// history (the removed `github` field/link, 4753eba) already backed out of.
+// old hypothetical `github` field) is null for five of six: real URLs
+// aren't ready yet for those, and projectCallouts.js's card template only
+// renders the external-link affordance when `link` is truthy, so null
+// still renders exactly as before this field existed — no icon, no anchor.
+// FlightLogAI is the one confirmed exception (below) — re-add the other
+// five once real URLs exist for them too, same one-entry-at-a-time
+// approach rather than unlocking the template speculatively ahead of a
+// real URL (this codebase's own history, the removed `github` field/link,
+// 4753eba, already backed out of exactly that).
 export const projects = [
   {
     wpt: 'WPT-01',
     title: 'FlightLogAI',
     blurb: 'Live ArduPilot log-analysis platform — upload a dataflash log, get flight diagnostics a pilot can act on. FastAPI, Supabase/Postgres, Cloudflare R2, deployed on Render.',
     tags: ['FastAPI', 'Supabase', 'R2'],
-    link: null,
+    // The only one of the six with a real, live URL — confirmed. The other
+    // five stay null (see the comment above this array) until their own
+    // URLs exist; this isn't a template-wide unlock, just this one entry.
+    link: 'https://www.flightlogai.com',
   },
   {
     wpt: 'WPT-02',
